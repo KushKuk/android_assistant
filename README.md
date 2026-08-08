@@ -10,7 +10,7 @@ The project is being developed incrementally, starting with the Android integrat
 
 ## Current Status
 
-Phase 2 is complete.
+Phase 4 is complete.
 
 The current implementation provides a Flutter-to-Kotlin communication bridge using Android platform channels.
 
@@ -910,7 +910,7 @@ Implemented:
 
 ### Phase 3 — Contacts
 
-Planned:
+Implemented:
 
 - Contacts permission
 - Android Contacts API
@@ -920,11 +920,11 @@ Planned:
 - Missing-contact handling
 - Contacts without phone numbers
 
-**Status:** Planned
+**Status:** Complete
 
 ### Phase 4 — Calling
 
-Planned:
+Implemented:
 
 ```text
 Command
@@ -942,7 +942,7 @@ Confirmation
 Android call
 ```
 
-**Status:** Planned
+**Status:** Complete
 
 ### Phase 5 — Speech
 
@@ -953,7 +953,7 @@ Planned:
 - Speech abstractions
 - Voice state management
 
-**Status:** Planned
+**Status:** In progress
 
 ### Phase 6 — Voice Interaction
 
@@ -1163,71 +1163,6 @@ Build a debug APK:
 ```bash
 flutter build apk --debug
 ```
-
-### Current Verification
-
-The current Phase 2 implementation has been verified with:
-
-```
-flutter analyze          PASS
-flutter test              PASS
-flutter build apk --debug PASS
-```
-
-The Android NDK installation was repaired after the SDK reported a missing:
-
-```
-source.properties
-```
-
-The project currently builds successfully using:
-
-```
-NDK 28.2.13676358
-```
-
-Runtime verification of the MethodChannel/EventChannel bridge is currently pending.
-
----
-
-## Development Philosophy
-
-The Assistant is being built incrementally.
-
-The project prioritizes:
-
-- Real Android integration
-- Reliability
-- Privacy
-- Low battery usage
-- Clean architecture
-- Modular capabilities
-- UI polish
-
-The goal is not to create a simulated assistant interface.
-
-The goal is to progressively build a real Android assistant that can interact with the device and eventually operate independently of the Flutter UI.
-
----
-
-## Contributing
-
-The project is currently under active development.
-
-New capabilities should follow the modular architecture and avoid coupling unrelated Android functionality to the Flutter UI.
-
-When adding a new capability:
-
-1. Define the capability interface.
-2. Keep Android-specific implementation in Kotlin.
-3. Expose only the necessary functionality through platform channels.
-4. Keep command parsing separate from execution.
-5. Handle Android permissions explicitly.
-6. Add tests where practical.
-7. Verify the feature on an Android emulator or physical device.
-8. Document Android version and device limitations.
-
----
 
 ## License
 

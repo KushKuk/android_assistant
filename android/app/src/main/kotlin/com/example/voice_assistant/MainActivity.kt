@@ -11,4 +11,13 @@ class MainActivity : FlutterActivity() {
         assistantBridge = AssistantBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         assistantBridge.register()
     }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        assistantBridge.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
 }

@@ -1,10 +1,26 @@
 import 'package:flutter/services.dart';
 import 'package:voice_assistant/models/assistant_integration_status.dart';
+import 'package:voice_assistant/models/call_execution_result.dart';
 import 'package:voice_assistant/models/assistant_settings.dart';
+import 'package:voice_assistant/models/contact_candidate.dart';
 
 abstract interface class AssistantPlatform {
   Future<AssistantIntegrationStatus> getIntegrationStatus();
   Future<void> syncSettings(AssistantSettings settings);
+  Future<bool> hasContactsPermission();
+  Future<bool> requestContactsPermission();
+  Future<ContactSearchResult> resolveContacts(String query);
+  Future<bool> hasCallPermission();
+  Future<bool> requestCallPermission();
+  Future<CallExecutionResult> prepareCall({
+    String? contactId,
+    String? phoneNumber,
+    String? displayName,
+  });
+  Future<CallExecutionResult> confirmCall({
+    required String confirmationToken,
+    required bool confirmed,
+  });
   Stream<Map<Object?, Object?>> get events;
 }
 
@@ -52,5 +68,89 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
       'wakeWordEnabled': settings.wakeWordEnabled,
       'voiceFeedbackEnabled': settings.voiceFeedbackEnabled,
     });
+  }
+
+  @override
+  Future<bool> hasContactsPermission() async {
+    return await _methodChannel.invokeMethod<bool>('hasContactsPermission') ??
+        false;
+  }
+
+  @override
+  Future<bool> requestContactsPermission() async {
+    final result = await _methodChannel.invokeMethod<Object?>(
+      'requestContactsPermission',
+    );
+    return result is Map && result['granted'] == true;
+  }
+
+  @override
+  Future<ContactSearchResult> resolveContacts(String query) async {
+    final result = await _methodChannel.invokeMethod<Object?>(
+      'resolveContacts',
+      {'query': query},
+    );
+    if (result is! Map) {
+      throw PlatformException(
+        code: 'invalid_contact_response',
+        message: 'Android returned an invalid contact search result.',
+      );
+    }
+    return ContactSearchResult.fromMap(Map<Object?, Object?>.from(result));
+  }
+
+  @override
+  Future<bool> hasCallPermission() async {
+    return await _methodChannel.invokeMethod<bool>('hasCallPermission') ??
+        false;
+  }
+
+  @override
+  Future<bool> requestCallPermission() async {
+    final result = await _methodChannel.invokeMethod<Object?>(
+      'requestCallPermission',
+    );
+    return result is Map && result['granted'] == true;
+  }
+
+  @override
+  Future<CallExecutionResult> prepareCall({
+    String? contactId,
+    String? phoneNumber,
+    String? displayName,
+  }) {
+    return _invokeCallResult('prepareCall', {
+      'contactId': contactId,
+      'phoneNumber': phoneNumber,
+      'displayName': displayName,
+    });
+  }
+
+  @override
+  Future<CallExecutionResult> confirmCall({
+    required String confirmationToken,
+    required bool confirmed,
+  }) {
+    return _invokeCallResult('confirmCall', {
+      'confirmationToken': confirmationToken,
+      'confirmed': confirmed,
+    });
+  }
+
+  Future<CallExecutionResult> _invokeCallResult(
+    String method,
+    Map<String, Object?> arguments,
+  ) async {
+    final result = await _methodChannel.invokeMethod<Object?>(
+      method,
+      arguments,
+    );
+    if (result is! Map) {
+      throw PlatformException(
+        code: 'invalid_call_response',
+        message: 'Android returned an invalid call result.',
+      );
+    }
+    return CallExecutionResult.fromMap(Map<Object?, Object?>.from(result));
   }
 }
