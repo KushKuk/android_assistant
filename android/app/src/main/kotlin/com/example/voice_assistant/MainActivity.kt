@@ -12,6 +12,11 @@ class MainActivity : FlutterActivity() {
         assistantBridge.register()
     }
 
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        assistantBridge.dispose()
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,

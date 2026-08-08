@@ -8,6 +8,7 @@ import android.os.Build
 import com.example.voice_assistant.calls.CallRequest
 import com.example.voice_assistant.calls.SafeCallPipeline
 import com.example.voice_assistant.contacts.ContactResolver
+import com.example.voice_assistant.speech.AssistantTextToSpeech
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -23,6 +24,7 @@ class AssistantBridge(
     private val settingsStore = NativeAssistantSettingsStore(activity.applicationContext)
     private val contactResolver = ContactResolver(activity.contentResolver)
     private val safeCallPipeline = SafeCallPipeline(activity, contactResolver)
+    private val tts = AssistantTextToSpeech(activity.applicationContext) { eventSink }
     private var eventSink: EventChannel.EventSink? = null
     private var pendingContactsPermissionResult: MethodChannel.Result? = null
     private var pendingCallPermissionResult: MethodChannel.Result? = null
@@ -50,6 +52,9 @@ class AssistantBridge(
             "requestCallPermission" -> requestCallPermission(result)
             "prepareCall" -> prepareCall(call, result)
             "confirmCall" -> confirmCall(call, result)
+            "speak" -> speak(call, result)
+            "stopSpeaking" -> { tts.stop(); result.success(null) }
+            "getTtsStatus" -> result.success(tts.getStatus())
             else -> result.notImplemented()
         }
     }
@@ -191,6 +196,22 @@ class AssistantBridge(
 
     override fun onCancel(arguments: Any?) {
         eventSink = null
+    }
+
+    private fun speak(call: MethodCall, result: MethodChannel.Result) {
+        val arguments = call.arguments as? Map<*, *> ?: run {
+            result.error("invalid_arguments", "Text is required.", null)
+            return
+        }
+        val text = arguments["text"] as? String ?: run {
+            result.success(mapOf("success" to false, "message" to "Text must not be empty."))
+            return
+        }
+        result.success(tts.speak(text))
+    }
+
+    fun dispose() {
+        tts.shutdown()
     }
 
     private companion object {
