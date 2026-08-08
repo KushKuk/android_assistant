@@ -46,8 +46,18 @@ class AssistantHomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 36),
               Center(
-                child: AssistantOrb(
-                  isActive: controller.settings.wakeWordEnabled,
+                child: GestureDetector(
+                  onTap: () {
+                    if (controller.state == AssistantState.listening) {
+                      controller.stopListening();
+                    } else {
+                      controller.startListening();
+                    }
+                  },
+                  child: AssistantOrb(
+                    isActive: controller.state == AssistantState.listening ||
+                        controller.settings.wakeWordEnabled,
+                  ),
                 ),
               ),
               const SizedBox(height: 28),

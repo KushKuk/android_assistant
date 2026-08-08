@@ -1,1144 +1,836 @@
-# Android Personal Assistant
+# Android Voice Assistant
 
-A personal Android voice assistant built with Flutter and native Kotlin.
+A modular personal voice assistant for Android built with Flutter and native Kotlin.
 
-The long-term goal is to create a lightweight, privacy-conscious Android assistant that can interact with the phone through voice, execute system actions, and eventually operate as a background voice assistant.
+The project combines Flutter for the application layer and state management with native Android services for speech recognition, text-to-speech, contacts, calling, and other platform-specific capabilities.
 
-The project is being developed incrementally, starting with the Android integration layer and progressing toward voice interaction, calling, wake-word detection, automation, and AI-powered capabilities.
+The assistant is being developed incrementally, with each capability isolated and independently testable.
 
 ---
 
 ## Current Status
 
-Phase 4 is complete.
+The project has completed Phases 1–7.
 
-The current implementation provides a Flutter-to-Kotlin communication bridge using Android platform channels.
+### Completed
 
-### Implemented
-
-- Flutter application foundation
-- Configurable assistant settings
-- Persistent settings synchronization
-- Flutter-to-Kotlin communication through `MethodChannel`
-- Kotlin-to-Flutter event communication through `EventChannel`
-- Native settings storage
-- Android bridge status reporting
-- Native `bridge_ready` event
+- Persistent assistant settings
+- Configurable assistant name
+- Flutter ↔ Kotlin MethodChannel bridge
+- Flutter ↔ Kotlin EventChannel bridge
+- Native Android contact resolution
+- Safe phone-call execution pipeline
+- Deterministic voice command parser
+- Native Android Text-to-Speech
+- Native Android Speech-to-Text
+- Flutter AssistantController
+- Speech-to-command integration
 - Android debug APK builds successfully
-- Flutter static analysis passes
-- Flutter tests pass
+- Comprehensive Flutter test suite
 
 ### Not Yet Implemented
 
-- Microphone access
-- Speech-to-text
-- Text-to-speech
-- Contact access
-- Phone calls
-- SMS
 - Wake-word detection
-- Background voice activation
-- `VoiceInteractionService`
+- Background listening
+- Always-on microphone
 - Default Android assistant integration
-- AI/LLM command processing
+- VoiceInteractionService
+- Automatic command execution beyond the currently implemented calling pipeline
+- AI/LLM-based intent understanding
+- Bluetooth control
+- Wi-Fi control
+- SMS
 - Reminders
-- Alarms
-- Timers
-- NFC automation
-- Sensor integrations
-
-These capabilities will be introduced incrementally in later phases.
-
----
-
-## Vision
-
-The eventual goal is for the Assistant to function as a personal Android assistant rather than simply a voice-controlled Flutter application.
-
-The intended interaction is:
-
-```text
-Phone idle
-    |
-    v
-Wake-word detection
-    |
-    v
-"Hey Assistant"
-    |
-    v
-Voice interaction
-    |
-    v
-Speech-to-text
-    |
-    v
-Command parsing
-    |
-    v
-Android action
-    |
-    v
-Text-to-speech response
-    |
-    v
-Return to idle
-```
-
-For example:
-
-```
-User: "Hey Assistant"
-A: "Yes?"
-User: "Call Mom."
-A: "Call Mom?"
-User: "Yes."
-A: "Calling Mom."
-```
-
-The first major functional milestone is reliable voice-controlled phone calling.
+- General device automation
 
 ---
 
 ## Architecture
 
-The Assistant uses Flutter for the application layer and Kotlin for Android-specific functionality.
+The project follows a layered architecture.
 
 ```text
-                    Assistant
-                        |
-           +------------+------------+
-           |                         |
-        Flutter                    Kotlin
-           |                         |
-           |                    Android APIs
-           |                         |
-           +-------- Platform -------+
-                    Channels
+                         Android Assistant
+                                |
+                                v
+                       +------------------+
+                       | Assistant UI     |
+                       +--------+---------+
+                                |
+                                v
+                    +-----------------------+
+                    | AssistantController   |
+                    |                       |
+                    | State                 |
+                    | Transcript            |
+                    | Command coordination  |
+                    +----------+------------+
+                               |
+                               v
+                    +-----------------------+
+                    | AssistantPlatform     |
+                    |                       |
+                    | Flutter abstraction   |
+                    +----------+------------+
+                               |
+                 +-------------+-------------+
+                 |                           |
+                 v                           v
+          MethodChannel                EventChannel
+                 |                           |
+                 +-------------+-------------+
+                               |
+                               v
+                    +-----------------------+
+                    | Android Kotlin Layer  |
+                    +-----------------------+
+                       |       |       |
+                       v       v       v
+                      STT     TTS   Android APIs
+                                      |
+                              +-------+-------+
+                              |               |
+                              v               v
+                          Contacts         Calling
 ```
 
-### Flutter
-
-Flutter is responsible for:
-
-- User interface
-- Settings
-- Assistant configuration
-- Assistant state visualization
-- Command history
-- Contact aliases
-- Local application state
-- Onboarding
-- Permission status
-- Cross-platform application logic
-
-### Kotlin
-
-Native Kotlin will handle Android-specific functionality such as:
-
-- Voice interaction
-- Android assistant integration
-- Contacts
-- Phone calls
-- Speech recognition
-- Text-to-speech
-- Wake-word integration
-- Android intents
-- Permissions
-- Background behavior
-- System integrations
-
-### Platform Bridge
-
-The current Android integration uses two Flutter platform channels.
-
-#### MethodChannel
-
-MethodChannel is used for request/response communication between Flutter and Kotlin.
-
-```text
-Flutter
-    |
-    | MethodChannel
-    v
-Kotlin
-```
-
-The bridge currently supports:
-
-- Synchronization of persisted assistant settings
-- Retrieval of Android integration status
-
-#### EventChannel
-
-EventChannel is used for asynchronous native events.
-
-```text
-Kotlin
-    |
-    | EventChannel
-    v
-Flutter
-```
-
-The current native event is:
-
-- `bridge_ready`
-
-The event architecture is intentionally designed to support future assistant events such as:
-
-- `wake_word_detected`
-- `listening_started`
-- `speech_received`
-- `processing_started`
-- `command_executing`
-- `command_completed`
-- `speaking_started`
-- `assistant_error`
-
-### Assistant Identity
-
-The Assistant's name is configurable.
-
-The default name is:
-
-> Assistant
-
-The application is designed so that the assistant name is not hard-coded throughout the application.
-
-For example, the user could change the name to:
-
-- Jarvis
-- Atlas
-- or any other supported name
-
-The assistant name and wake word are treated as separate concepts. Changing the assistant name does not automatically change the wake-word detection model.
-
-### Settings
-
-The Assistant is designed around a persistent settings model.
-
-Example settings include:
-
-- Assistant Name
-- Wake Word
-- Calling Mode
-- Voice
-- Speech Rate
-- Speech Pitch
-- Language
-- Wake Word Enabled
-- Voice Feedback Enabled
-
-Settings are persisted locally and synchronized between Flutter and Kotlin.
-
-The Flutter application is responsible for providing the user interface for these settings. The native Android layer can access synchronized settings when required by future native services.
-
----
-
-## Planned Capabilities
-
-The architecture is designed to eventually support multiple capability modules.
-
-### Communication
-
-Planned:
-
-- Voice-controlled phone calls
-- Contact resolution
-- Contact aliases
-- SMS
-- Communication confirmations
-
-Example:
-
-> "Call Mom."
-
-The intended flow is:
-
-```text
-Voice command
-    |
-    v
-Command parser
-    |
-    v
-Contact resolver
-    |
-    v
-Contact / phone number
-    |
-    v
-Confirmation
-    |
-    v
-Android phone call
-```
-
-### Productivity
-
-Planned:
-
-- Tasks
-- Reminders
-- Alarms
-- Timers
-- Notes
-- Command history
-
-Examples:
-
-- "Remind me to submit my assignment at 8 PM."
-- "Set a timer for 25 minutes."
-- "Set an alarm for 7 AM."
-- "Add study operating systems to my tasks."
-- "Take a note: buy solder."
-
-### Applications
-
-Planned:
-
-- Launch installed applications
-- Open specific Android screens
-- Media controls
-- Application-specific actions where Android allows them
-
-Examples:
-
-- "Open Spotify."
-- "Open Chrome."
-- "Open the camera."
-
-Application-specific functionality will depend on the APIs and intents exposed by the target application.
-
-### Device Control
-
-Potential future functionality includes:
-
-- Flashlight
-- Bluetooth
-- Wi-Fi
-- Do Not Disturb
-- Volume
-- System settings
-
-Examples:
-
-- "Turn on the flashlight."
-- "Turn on Bluetooth."
-- "Turn off Do Not Disturb."
-
-Android restrictions will be respected where direct modification is not permitted.
-
-### Media Control
-
-Potential future functionality includes:
-
-- Play
-- Pause
-- Next track
-- Previous track
-- Volume control
-- Media session interaction
-- Opening music applications
-
-Examples:
-
-- "Play music."
-- "Pause."
-- "Next song."
-- "Turn the volume up."
-
-The exact functionality will depend on Android's media-session APIs and the target application's capabilities.
-
-### Notes and Memory
-
-The Assistant may eventually provide a local note and memory system.
-
-Examples:
-
-- "Take a note: buy solder."
-- "Remember that my project deadline is Friday."
-- "What did I ask you to remember?"
-
-Notes and user-created memory should be stored locally unless the user explicitly enables another storage mechanism.
-
-### Navigation
-
-Potential future functionality includes integration with navigation applications.
-
-Examples:
-
-- "Navigate home."
-- "Take me to college."
-- "How long will it take to get to the airport?"
-- "Find the nearest petrol station."
-
-Navigation functionality may use Android intents and available navigation applications.
-
-### Sensors
-
-The Assistant may eventually interact with Android device sensors.
-
-Potential integrations include:
-
-- Accelerometer
-- Gyroscope
-- Magnetometer
-- GPS
-- Proximity sensor
-- Ambient light sensor
-- Other available device sensors
-
-Examples:
-
-- "Is my phone level?"
-- "Which direction am I facing?"
-- "How fast am I moving?"
-- "What's the current location?"
-
-Sensor availability varies by device.
-
-### NFC
-
-NFC may eventually be used as a physical trigger for Assistant actions.
-
-For example:
-
-```text
-Desk NFC Tag
-      |
-      v
-Start focus timer
-      |
-      v
-Open development environment
-      |
-      v
-Enable focus mode
-      |
-      v
-Start music
-```
-
-Another example:
-
-```text
-Bed NFC Tag
-      |
-      v
-Enable Do Not Disturb
-      |
-      v
-Set alarm
-      |
-      v
-Start sleep timer
-```
-
-NFC functionality will be implemented as an optional automation module.
-
-### Automation
-
-The long-term architecture may support custom routines.
-
-The basic model is:
-
-```text
-Trigger
-   |
-   v
-Condition
-   |
-   v
-Action
-```
-
-Examples:
-
-```text
-Headphones connected
-        |
-        v
-Open Spotify
-        |
-        v
-Enable focus mode
-```
-
-Or:
-
-```text
-NFC tag scanned
-        |
-        v
-Start 50-minute timer
-        |
-        v
-Open development environment
-```
-
-Potential triggers include:
-
-- Voice commands
-- NFC
-- Device charging
-- Bluetooth connections
-- Application launches
-- Time
-- Sensors
-- Location
-- Other Android events
-
-Android restrictions and permission requirements will be respected.
-
-### AI
-
-An optional AI layer may eventually handle more complex natural-language commands.
-
-The architecture is intentionally designed so that basic commands do not require an LLM.
-
-For example:
-
-> "Call Mom."
-
-should be handled deterministically.
-
-More complex commands could optionally use an AI model:
-
-> "I have about an hour before class. Set up something useful so I can get some work done."
-
-The AI layer should produce structured intents rather than receiving unrestricted control over the Android system.
-
-A potential architecture is:
-
-```text
-User command
-     |
-     v
-Command classifier
-     |
-     +----------------------+
-     |                      |
-     v                      v
-Simple command          Complex command
-     |                      |
-     v                      v
-Local parser                AI
-     |                      |
-     +----------+-----------+
-                |
-                v
-        Structured intent
-                |
-                v
-        Command executor
-                |
-                v
-          Android action
-```
-
-This keeps basic functionality reliable and reduces unnecessary AI usage.
-
-### Natural Language Understanding
-
-The Assistant should eventually understand variations of the same command.
-
-For example:
-
-- "Call Mom."
-- "Give Mom a call."
-- "Phone Mom."
-- "Can you call Mom?"
-- "Please call Mom."
-
-All of these should resolve to the same underlying intent:
-
-> CALL
-
-The command architecture should separate:
-
-- Intent detection
-- Entity extraction
-- Validation
-- Command execution
-
-### Multi-Turn Conversations
-
-The Assistant may eventually support multi-step conversations.
-
-Example:
-
-```
-User: "Set a timer."
-A: "How long?"
-User: "45 minutes."
-A: "Timer set."
-```
-
-Another example:
-
-```
-User: "Call Mom."
-A: "Which number?"
-User: "Mobile."
-A: "Calling Mom."
-```
-
-This requires an assistant state machine capable of maintaining short-lived conversational context.
-
----
-
-## Command Architecture
-
-The Assistant should use a modular command architecture rather than a large conditional statement.
-
-A possible structure is:
-
-```text
-Command
- ├── CallCommand
- ├── MessageCommand
- ├── ReminderCommand
- ├── TimerCommand
- ├── AlarmCommand
- ├── OpenAppCommand
- ├── NoteCommand
- └── DeviceCommand
-```
-
-Supporting components may include:
-
-- CommandParser
-- CommandExecutor
-- CommandResult
-- ContactResolver
-- CallExecutor
-- ReminderExecutor
-- TimerExecutor
-- AlarmExecutor
-- AppLauncher
-- NoteManager
-
-Example:
-
-```text
-"Call Mom"
-      |
-      v
-CommandParser
-      |
-      v
-CallCommand
-      |
-      v
-ContactResolver
-      |
-      v
-Phone number
-      |
-      v
-CallExecutor
-      |
-      v
-Android phone call
-```
-
----
-
-## Voice Pipeline
-
-The eventual voice pipeline is:
-
-```text
-Wake Word
-    |
-    v
-Voice Capture
-    |
-    v
-Speech-to-Text
-    |
-    v
-Intent Detection
-    |
-    v
-Entity Extraction
-    |
-    v
-Command Execution
-    |
-    v
-Text-to-Speech
-```
-
-Each stage should be independently replaceable.
-
-### Speech Recognition
-
-A replaceable speech-recognition abstraction is planned.
-
-Example interface:
-
-```text
-SpeechRecognizer
-
-startListening()
-stopListening()
-onPartialResult()
-onFinalResult()
-onError()
-```
-
-The implementation should be isolated from the command engine.
-
-Where practical, on-device speech recognition should be preferred.
-
-### Text-to-Speech
-
-A replaceable text-to-speech abstraction is planned.
-
-Example interface:
-
-```text
-TextToSpeechManager
-
-speak()
-stop()
-setVoice()
-setRate()
-setPitch()
-```
-
-Responses should generally be concise.
-
-Examples:
-
-- "Calling Mom."
-- "Timer set."
-- "I couldn't find that contact."
-- "Which contact do you mean?"
-
-### Wake Word
-
-The long-term goal is local wake-word detection.
-
-Example:
-
-> "Hey Assistant"
-
-The preferred architecture is:
-
-```text
-Low-power wake-word detection
-          |
-          v
-Wake word detected
-          |
-          v
-Full speech recognition
-```
-
-The application should not continuously send microphone audio to a cloud service solely for wake-word detection.
-
-A replaceable abstraction is planned:
-
-```text
-WakeWordDetector
-
-start()
-stop()
-onWakeWordDetected()
-dispose()
-```
-
-The wake-word implementation will be integrated separately from the assistant-name configuration.
-
----
-
-## Android Assistant Integration
-
-The long-term Android architecture may use official Android assistant APIs such as:
-
-- `VoiceInteractionService`
-- `VoiceInteractionSession`
-- `RoleManager`
-- `ROLE_ASSISTANT`
-- Android Contacts APIs
-- Android Telecom APIs
-- Speech recognition APIs
-- Text-to-Speech APIs
-- Android notification APIs
-- Appropriate background execution APIs
-
-The implementation will respect Android security and lifecycle restrictions.
-
-No undocumented mechanisms will be used to bypass Android restrictions.
-
----
-
-## Privacy
-
-Privacy is a core design consideration.
-
-The Assistant should not:
-
-- Secretly record audio
-- Store raw microphone recordings without explicit user configuration
-- Upload microphone audio unnecessarily
-- Bypass Android permissions
-- Bypass Android background restrictions
-- Use undocumented APIs to circumvent system protections
-
-Where practical, processing should happen locally.
-
-The user should have clear control over:
-
-- Microphone access
-- Contacts access
-- Phone access
-- Voice features
-- Wake-word detection
-- Command history
-- Assistant settings
-
-Command history should be locally stored and deletable.
-
----
-
-## Battery Usage
-
-Background voice assistants can consume significant battery if implemented incorrectly.
-
-The intended architecture is:
-
-```text
-LOW POWER
-    |
-    v
-Wake-word detection
-    |
-    v
-Wake word detected
-    |
-    v
-Full voice processing
-    |
-    v
-Return to low-power state
-```
-
-The system should avoid:
-
-- Constant polling
-- Unnecessary background services
-- Expensive continuous inference
-- Continuous cloud audio streaming
-
-Battery behavior will be optimized after the core functionality is implemented.
-
----
-
-## Security
-
-The Assistant will interact with sensitive Android capabilities.
-
-Examples include:
-
-- Microphone
-- Contacts
-- Phone calls
-- Messages
-- Notifications
-- Location
-- Device settings
-
-Each capability should use Android's permission model.
-
-Commands that can cause significant side effects should support confirmation where appropriate.
-
-For example:
-
-```
-User: "Call Mom."
-A: "Call Mom?"
-User: "Yes."
-A: "Calling Mom."
-```
-
-A direct execution mode may be added later as an explicit user preference.
-
----
-
-## Development Roadmap
-
-### Phase 0 — Project Setup
-
-- Flutter project
-- Android configuration
-- Development environment
-- Build system
-
-**Status:** Complete
-
-### Phase 1 — Settings
-
-Planned/implemented:
-
-- Assistant settings model
-- Persistent configuration
-- Assistant name
-- Voice settings
-- Wake-word configuration
-- Calling mode
-- Local settings storage
-
-**Status:** Complete
-
-### Phase 2 — Flutter/Kotlin Bridge
-
-Implemented:
-
-- MethodChannel
-- EventChannel
-- Settings synchronization
-- Android bridge status
-- Native event stream
-- `bridge_ready` event
-
-**Status:** Complete
-
-### Phase 3 — Contacts
-
-Implemented:
-
-- Contacts permission
-- Android Contacts API
-- Contact resolver
-- Contact aliases
-- Multiple-match handling
-- Missing-contact handling
-- Contacts without phone numbers
-
-**Status:** Complete
-
-### Phase 4 — Calling
-
-Implemented:
-
-```text
-Command
-    |
-    v
-ContactResolver
-    |
-    v
-Phone number
-    |
-    v
-Confirmation
-    |
-    v
-Android call
-```
-
-**Status:** Complete
-
-### Phase 5 — Speech
-
-Planned:
-
-- Speech-to-text
-- Text-to-speech
-- Speech abstractions
-- Voice state management
-
-**Status:** In progress
-
-### Phase 6 — Voice Interaction
-
-Planned:
-
-- VoiceInteractionService
-- VoiceInteractionSession
-- Android assistant role
-- Background interaction
-- Lifecycle management
-
-**Status:** Planned
-
-### Phase 7 — Wake Word
-
-Planned:
-
-- WakeWordDetector abstraction
-- Local wake-word detection
-- Low-power operation
-- Wake-word event handling
-
-**Status:** Planned
-
-### Phase 8 — Commands
-
-Planned:
-
-- Calls
-- Messages
-- Timers
-- Alarms
-- Reminders
-- Notes
-- App launching
-- Device actions
-
-**Status:** Planned
-
-### Phase 9 — AI
-
-Planned:
-
-- Natural-language understanding
-- Complex command interpretation
-- Optional LLM integration
-- Context-aware interactions
-- Structured intent generation
-
-**Status:** Planned
-
-### Phase 10 — Automation
-
-Planned:
-
-- Routines
-- NFC triggers
-- Sensor triggers
-- Contextual actions
-- Custom user automations
-
-**Status:** Planned
-
----
-
-## Project Structure
-
-The project is organized around a clear separation between Flutter and Android functionality.
-
-```text
-voice_assistant/
-|
-+-- lib/
-|   |
-|   +-- core/
-|   |
-|   +-- models/
-|   |
-|   +-- commands/
-|   |
-|   +-- services/
-|   |
-|   +-- features/
-|   |
-|   +-- screens/
-|   |
-|   +-- widgets/
-|   |
-|   +-- main.dart
-|
-+-- android/
-|   |
-|   +-- app/
-|       |
-|       +-- src/
-|           |
-|           +-- main/
-|               |
-|               +-- kotlin/
-|                   |
-|                   +-- assistant/
-|                   +-- voice/
-|                   +-- calls/
-|                   +-- contacts/
-|                   +-- speech/
-|                   +-- tts/
-|                   +-- commands/
-|                   +-- settings/
-|
-+-- test/
-|
-+-- pubspec.yaml
-|
-+-- README.md
-```
-
-The exact structure may evolve as the project grows.
+The Flutter layer is responsible for UI, state, orchestration, and deterministic command parsing.
+The Kotlin layer handles Android-specific functionality.
 
 ---
 
 ## Technology Stack
 
-### Frontend
+### Flutter
 
-- Flutter
-- Dart
+- Flutter 3.44.9
+- Dart 3.12.2
 
 ### Android
 
 - Kotlin
 - Android SDK
-- Android platform APIs
-- Flutter Platform Channels
+- compileSdk 36
+- targetSdk 36
+- minSdk 24
 
-### Communication
+### Build Tools
+
+- Android Gradle Plugin 9.0.1
+- Kotlin 2.3.20
+- Gradle 9.1.0
+- NDK 28.2.13676358
+
+### Platform Communication
 
 - MethodChannel
 - EventChannel
 
-### Future Voice Stack
+---
 
-- Android speech recognition
-- Android Text-to-Speech
-- Local wake-word detection
+## Phase 1 — Settings
 
-### Future AI Stack
+**Status:** Complete
 
-The AI provider has intentionally not been hard-coded into the architecture.
+The application supports persistent assistant settings.
 
-An AI model may eventually be used for natural-language understanding and advanced assistant capabilities.
+The assistant name can be configured through the Flutter interface.
+
+Settings are persisted locally and synchronized with the native Android layer.
+
+The architecture does not hard-code a specific assistant name.
 
 ---
 
-## Development Environment
+## Phase 2 — Native Flutter/Kotlin Bridge
 
-### Requirements
+**Status:** Complete
 
-- Flutter
-- Dart
-- Android SDK
-- Android SDK Platform Tools
-- Android SDK Build Tools
-- Compatible Android NDK
-- Kotlin/Java toolchain
-- Android emulator or physical Android device
+The project uses a single native communication layer between Flutter and Android.
 
-Verify the environment with:
+### MethodChannel
 
-```bash
-flutter doctor
+Used for request/response operations such as:
+
+- settings synchronization
+- Android bridge status
+- speech operations
+- TTS operations
+- contact operations
+- calling operations
+
+### EventChannel
+
+Used for asynchronous native events.
+
+The bridge initially emits:
+
+```
+bridge_ready
 ```
 
-Check connected devices with:
+and has since been extended to carry speech and TTS events.
 
-```bash
-flutter devices
+Important files include:
+
+```
+lib/services/assistant_platform.dart
+lib/models/assistant_integration_status.dart
+android/app/src/main/kotlin/com/example/voice_assistant/AssistantBridge.kt
+android/app/src/main/kotlin/com/example/voice_assistant/MainActivity.kt
 ```
 
-### Running the Project
+No additional MethodChannel or EventChannel is created for individual capabilities.
 
-From the project directory:
+---
 
-```bash
-flutter pub get
+## Phase 3 — Android Contacts
+
+**Status:** Complete
+
+Native Android contact resolution is implemented.
+
+Main native component:
+
 ```
+android/app/src/main/kotlin/com/example/voice_assistant/contacts/ContactResolver.kt
+```
+
+The application supports:
+
+- checking contact permission
+- requesting contact permission
+- searching contacts by name
+- ranking candidates
+- deduplicating results
+- retrieving phone numbers
+
+Android permission:
+
+```
+READ_CONTACTS
+```
+
+Contact data is not persisted by the application.
+
+Contact resolution explicitly fails when the required permission has not been granted.
+
+---
+
+## Phase 4 — Safe Call Execution
+
+**Status:** Complete
+
+The application contains a safety-focused native call execution pipeline.
+
+Main component:
+
+```
+android/app/src/main/kotlin/com/example/voice_assistant/calls/SafeCallPipeline.kt
+```
+
+The calling flow is intentionally split into preparation and execution.
+
+```text
+prepareCall()
+      |
+      v
+Validate target
+      |
+      v
+Validate phone number
+      |
+      v
+Validate contact ownership
+      |
+      v
+Generate confirmation token
+      |
+      v
+Explicit confirmation
+      |
+      v
+confirmCall(token, true)
+      |
+      v
+Android ACTION_CALL
+```
+
+A call cannot be placed directly from a parsed command.
+
+### Safety Features
+
+- Phone-number validation
+- Phone-number normalization
+- Contact ownership validation
+- Multiple-number handling
+- Expiring confirmation tokens
+- Confirmation timeout
+- Permission handling
+- Phone application availability checks
+- Android call-start error handling
+
+Confirmation tokens expire after 60 seconds.
+
+Android permission:
+
+```
+CALL_PHONE
+```
+
+If the permission is missing, the pipeline returns a structured `permissionRequired` result.
+
+No actual phone call was executed during development verification.
+
+---
+
+## Phase 5A — Text-to-Speech
+
+**Status:** Complete
+
+Native Android Text-to-Speech is implemented using:
+
+```
+android.speech.tts.TextToSpeech
+```
+
+Main native component:
+
+```
+AssistantTextToSpeech.kt
+```
+
+Flutter can access:
+
+```
+speak(text)
+stopSpeaking()
+getTtsStatus()
+```
+
+The existing MethodChannel and EventChannel are reused.
+
+### TTS Events
+
+```
+speaking_started
+speaking_completed
+speaking_stopped
+speech_error
+```
+
+The implementation includes:
+
+- Android TextToSpeech integration
+- locale fallback
+- device default locale
+- `en_US` fallback
+- utterance progress callbacks
+- stale utterance protection
+- thread-safe callback handling
+- main-thread event dispatch
+- lifecycle cleanup
+- TTS engine shutdown
+
+### Current Limitation
+
+Speech rate and pitch settings are stored by the application but are not yet applied to the native TTS engine.
+
+Runtime audio output has not been formally verified on a physical Android device.
+
+---
+
+## Phase 5B — Speech-to-Text
+
+**Status:** Complete
+
+Native Android Speech-to-Text is implemented using Android's speech recognition APIs.
+
+The architecture is:
+
+```text
+Microphone
+    |
+    v
+Android SpeechRecognizer
+    |
+    v
+Native speech service
+    |
+    v
+EventChannel
+    |
+    v
+AssistantPlatform
+    |
+    v
+AssistantController
+```
+
+Speech recognition supports asynchronous recognition events including:
+
+```
+listening_started
+partial_transcript
+final_transcript
+listening_stopped
+speech_error
+```
+
+The microphone is not automatically activated when the application starts.
+
+Speech recognition remains an explicit user action.
+
+Android microphone permission:
+
+```
+RECORD_AUDIO
+```
+
+Speech recognition, contacts, and calling remain separate native capabilities.
+
+---
+
+## Phase 6 — AssistantController
+
+**Status:** Complete
+
+The Flutter application contains a dedicated `AssistantController`.
+
+Main file:
+
+```
+lib/services/assistant_controller.dart
+```
+
+The controller uses the project's existing `ChangeNotifier` architecture.
+
+It coordinates:
+
+- speech recognition
+- transcripts
+- TTS state
+- native events
+- assistant state
+- command parsing
+
+It does not contain Android-specific implementation.
+
+### Assistant State
+
+The controller exposes high-level assistant states including:
+
+```
+idle
+listening
+processing
+speaking
+error
+```
+
+The controller receives native events through the existing EventChannel.
+
+It handles both speech-recognition and TTS events.
+
+### Transcript Handling
+
+The controller maintains:
+
+```
+partialTranscript
+finalTranscript
+```
+
+During speech recognition:
+
+```
+User: "Call Mo..."
+        ↓
+partialTranscript: "Call Mo..."
+```
+
+When recognition finishes:
+
+```
+finalTranscript: "Call Mom"
+```
+
+The controller then transitions into processing.
+
+---
+
+## Phase 7 — Speech-to-Command Integration
+
+**Status:** Complete
+
+The final speech transcript is now passed to the deterministic command parser.
+
+The current pipeline is:
+
+```text
+Speech-to-Text
+      |
+      v
+AssistantController
+      |
+      v
+CommandParser
+      |
+      v
+AssistantCommand
+```
+
+For example:
+
+```
+"Call Mom"
+```
+
+becomes:
+
+```
+CallCommand("Mom")
+```
+
+The resulting command is exposed through the controller.
+
+The controller provides access to:
+
+```
+lastCommandParseResult
+hasPendingCommand
+pendingCommand
+```
+
+### Command Parser
+
+The command parser is deterministic and side-effect free.
+
+Important files:
+
+```
+lib/commands/assistant_command.dart
+lib/commands/command_parse_result.dart
+lib/commands/command_parser.dart
+```
+
+Currently supported examples include:
+
+```
+Call Mom
+Phone Dad
+Give Mom a call
+Call 9876543210
+```
+
+The parser can return:
+
+```
+CallCommand(contactQuery)
+```
+
+or an explicit result for:
+
+- missing targets
+- unsupported commands
+- invalid input
+
+The parser does not:
+
+- access contacts
+- request permissions
+- place calls
+- access Android APIs
+- use an LLM
+- perform network requests
+
+### Current End-to-End Flow
+
+The currently implemented voice pipeline reaches command recognition.
+
+```text
+User
+ |
+ | speaks
+ v
+Android SpeechRecognizer
+ |
+ | final transcript
+ v
+AssistantController
+ |
+ v
+CommandParser
+ |
+ v
+CallCommand("Mom")
+ |
+ v
+pendingCommand
+```
+
+The command is currently exposed to the Flutter layer.
+
+Execution must remain separate from parsing.
+
+### Current Calling Architecture
+
+The project already has the components necessary for command execution:
+
+```text
+CallCommand("Mom")
+       |
+       v
+ContactResolver
+       |
+       v
+Phone number
+       |
+       v
+SafeCallPipeline.prepareCall()
+       |
+       v
+Confirmation required
+       |
+       v
+confirmCall(token, true)
+       |
+       v
+Android ACTION_CALL
+```
+
+The speech-to-command layer does not bypass this safety mechanism.
+
+---
+
+## Testing
+
+The project has a comprehensive Flutter test suite covering:
+
+- settings behavior
+- platform result parsing
+- TTS result handling
+- speech recognition behavior
+- command parsing
+- AssistantController state management
+- transcript handling
+- command integration
+- disposal/lifecycle behavior
+
+The latest reported test count is:
+
+```
+37 tests
+```
+
+All tests pass.
+
+---
+
+## Verification
+
+The project has repeatedly passed:
+
+```
+flutter analyze
+flutter test
+flutter build apk --debug
+```
+
+Current status:
+
+```
+flutter analyze       PASS
+flutter test          PASS
+flutter build apk     PASS
+```
+
+The Android debug APK is generated at:
+
+```
+build/app/outputs/flutter-apk/app-debug.apk
+```
+
+Runtime functionality should only be considered verified when explicitly tested on an Android device or emulator.
+
+Several development phases were verified through compilation and unit testing without claiming runtime verification.
+
+---
+
+## Project Structure
+
+A simplified structure:
+
+```text
+voice_assistant/
+|
+├── lib/
+│   |
+│   ├── commands/
+│   │   ├── assistant_command.dart
+│   │   ├── command_parse_result.dart
+│   │   └── command_parser.dart
+│   |
+│   ├── models/
+│   │   ├── assistant_integration_status.dart
+│   │   ├── call_execution_result.dart
+│   │   └── ...
+│   |
+│   ├── services/
+│   │   ├── assistant_controller.dart
+│   │   └── assistant_platform.dart
+│   |
+│   └── ...
+|
+├── android/
+│   |
+│   └── app/
+│       |
+│       └── src/main/kotlin/
+│           |
+│           └── com/example/voice_assistant/
+│               |
+│               ├── AssistantBridge.kt
+│               ├── MainActivity.kt
+│               |
+│               ├── calls/
+│               │   └── SafeCallPipeline.kt
+│               |
+│               ├── contacts/
+│               │   └── ContactResolver.kt
+│               |
+│               └── speech/
+│                   ├── AssistantTextToSpeech.kt
+│                   └── ...
+|
+└── test/
+    ├── assistant_controller_test.dart
+    ├── command_parser_test.dart
+    ├── tts_test.dart
+    └── ...
+```
+
+The exact project structure may contain additional files.
+
+---
+
+## Design Principles
+
+### Modular
+
+Each Android capability is isolated.
+
+```
+Speech
+Contacts
+Calling
+TTS
+```
+
+are separate concerns.
+
+### Safe
+
+Side-effecting actions are separated from parsing.
+
+A command such as:
+
+```
+Call Mom
+```
+
+does not inherently mean:
+
+```
+Place a call
+```
+
+The call must pass through the existing validation and confirmation pipeline.
+
+### Deterministic
+
+Basic commands currently use deterministic parsing rather than an LLM.
+
+This keeps core actions predictable and testable.
+
+### Platform-Aware
+
+Android-specific functionality stays in Kotlin.
+
+Flutter communicates with it through the platform abstraction.
+
+### Incremental
+
+The assistant is being developed as independent phases rather than one large implementation.
+
+Future functionality should not be implemented early simply because it is part of the long-term roadmap.
+
+---
+
+## Roadmap
+
+### Phase 8
+
+Connect parsed `CallCommand` objects to:
+
+```text
+ContactResolver
+    ↓
+SafeCallPipeline
+    ↓
+Explicit confirmation
+    ↓
+Call execution
+```
+
+This should preserve all existing Phase 4 safety guarantees.
+
+### Future Capabilities
+
+Potential future assistant capabilities include:
+
+- Wake-word activation
+- Background operation
+- Android VoiceInteractionService
+- Bluetooth control
+- Wi-Fi/device controls
+- Media controls
+- SMS
+- Reminders
+- Alarms
+- Device automation
+- AI/LLM intent understanding
+- Conversational responses
+
+These are **NOT** currently implemented.
+
+---
+
+## Safety Model
+
+The assistant is intentionally designed so that natural-language input does not directly trigger dangerous or irreversible actions.
+
+For example:
+
+```text
+Speech
+  ↓
+Transcript
+  ↓
+Command
+  ↓
+Validation
+  ↓
+Explicit confirmation
+  ↓
+Execution
+```
+
+This separation should be maintained as new capabilities are added.
+
+---
+
+## Development Commands
 
 Run static analysis:
 
@@ -1152,18 +844,28 @@ Run tests:
 flutter test
 ```
 
-Run the application:
-
-```bash
-flutter run
-```
-
 Build a debug APK:
 
 ```bash
 flutter build apk --debug
 ```
 
-## License
+---
 
-License information will be added as the project approaches public release.
+## Current Status Summary
+
+```
+Phase 1   Settings                    COMPLETE
+Phase 2   Native Bridge               COMPLETE
+Phase 3   Contacts                    COMPLETE
+Phase 4   Safe Calling                COMPLETE
+Phase 5A  Text-to-Speech              COMPLETE
+Phase 5B  Speech-to-Text              COMPLETE
+Phase 6   AssistantController         COMPLETE
+Phase 7   Speech-to-Command           COMPLETE
+Phase 8   Command Execution           NEXT
+```
+
+The project currently has a functional foundation for an Android voice assistant.
+
+The next major milestone is connecting the already-parsed `CallCommand` to the existing contact-resolution and safe-call pipeline without bypassing explicit confirmation.

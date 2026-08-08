@@ -4,6 +4,7 @@ import 'package:voice_assistant/models/call_execution_result.dart';
 import 'package:voice_assistant/models/assistant_settings.dart';
 import 'package:voice_assistant/models/contact_candidate.dart';
 import 'package:voice_assistant/models/tts_result.dart';
+import 'package:voice_assistant/models/stt_result.dart';
 
 abstract interface class AssistantPlatform {
   Future<AssistantIntegrationStatus> getIntegrationStatus();
@@ -25,6 +26,12 @@ abstract interface class AssistantPlatform {
   Future<TtsSpeakResult> speak(String text);
   Future<void> stopSpeaking();
   Future<TtsState> getTtsStatus();
+  Future<bool> hasMicrophonePermission();
+  Future<bool> requestMicrophonePermission();
+  Future<SttResult> startListening();
+  Future<SttResult> stopListening();
+  Future<SttResult> cancelListening();
+  Future<SttState> getSpeechRecognitionStatus();
   Stream<Map<Object?, Object?>> get events;
 }
 
@@ -206,6 +213,79 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
       return TtsState.unavailable;
     } on MissingPluginException {
       return TtsState.unavailable;
+    }
+  }
+
+  @override
+  Future<bool> hasMicrophonePermission() async {
+    return await _methodChannel.invokeMethod<bool>('hasMicrophonePermission') ??
+        false;
+  }
+
+  @override
+  Future<bool> requestMicrophonePermission() async {
+    final result = await _methodChannel.invokeMethod<Object?>(
+      'requestMicrophonePermission',
+    );
+    return result is Map && result['granted'] == true;
+  }
+
+  @override
+  Future<SttResult> startListening() async {
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('startListening');
+      if (result is! Map) {
+        return const SttResult(
+          success: false,
+          message: 'Invalid STT response from Android.',
+        );
+      }
+      return SttResult.fromMap(Map<Object?, Object?>.from(result));
+    } on PlatformException catch (e) {
+      if (e.code == 'permission_required') {
+        return const SttResult(
+          success: false,
+          message: 'Microphone permission is required.',
+        );
+      }
+      return SttResult(
+        success: false,
+        message: e.message ?? 'Failed to start listening.',
+      );
+    }
+  }
+
+  @override
+  Future<SttResult> stopListening() async {
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('stopListening');
+      if (result is! Map) return const SttResult(success: false);
+      return SttResult.fromMap(Map<Object?, Object?>.from(result));
+    } on PlatformException catch (e) {
+      return SttResult(success: false, message: e.message);
+    }
+  }
+
+  @override
+  Future<SttResult> cancelListening() async {
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('cancelListening');
+      if (result is! Map) return const SttResult(success: false);
+      return SttResult.fromMap(Map<Object?, Object?>.from(result));
+    } on PlatformException catch (e) {
+      return SttResult(success: false, message: e.message);
+    }
+  }
+
+  @override
+  Future<SttState> getSpeechRecognitionStatus() async {
+    try {
+      final result = await _methodChannel.invokeMethod<String>('getSpeechRecognitionStatus');
+      return SttState.fromName(result ?? 'unavailable');
+    } on PlatformException {
+      return SttState.unavailable;
+    } on MissingPluginException {
+      return SttState.unavailable;
     }
   }
 }

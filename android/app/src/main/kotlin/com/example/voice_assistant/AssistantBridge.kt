@@ -8,6 +8,7 @@ import android.os.Build
 import com.example.voice_assistant.calls.CallRequest
 import com.example.voice_assistant.calls.SafeCallPipeline
 import com.example.voice_assistant.contacts.ContactResolver
+import com.example.voice_assistant.speech.AssistantSpeechRecognizer
 import com.example.voice_assistant.speech.AssistantTextToSpeech
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
@@ -25,9 +26,11 @@ class AssistantBridge(
     private val contactResolver = ContactResolver(activity.contentResolver)
     private val safeCallPipeline = SafeCallPipeline(activity, contactResolver)
     private val tts = AssistantTextToSpeech(activity.applicationContext) { eventSink }
+    private val stt = AssistantSpeechRecognizer(activity.applicationContext) { eventSink }
     private var eventSink: EventChannel.EventSink? = null
     private var pendingContactsPermissionResult: MethodChannel.Result? = null
     private var pendingCallPermissionResult: MethodChannel.Result? = null
+    private var pendingMicrophonePermissionResult: MethodChannel.Result? = null
 
     fun register() {
         methodChannel.setMethodCallHandler(this)
@@ -55,6 +58,18 @@ class AssistantBridge(
             "speak" -> speak(call, result)
             "stopSpeaking" -> { tts.stop(); result.success(null) }
             "getTtsStatus" -> result.success(tts.getStatus())
+            "hasMicrophonePermission" -> result.success(hasMicrophonePermission())
+            "requestMicrophonePermission" -> requestMicrophonePermission(result)
+            "startListening" -> {
+                if (!hasMicrophonePermission()) {
+                    result.error("permission_required", "Microphone permission is required.", null)
+                } else {
+                    result.success(stt.startListening())
+                }
+            }
+            "stopListening" -> result.success(stt.stopListening())
+            "cancelListening" -> result.success(stt.cancelListening())
+            "getSpeechRecognitionStatus" -> result.success(stt.getStatus())
             else -> result.notImplemented()
         }
     }
@@ -89,6 +104,11 @@ class AssistantBridge(
             CALL_PERMISSION_REQUEST_CODE -> {
                 pendingCallPermissionResult?.success(mapOf("granted" to granted))
                 pendingCallPermissionResult = null
+                true
+            }
+            MICROPHONE_PERMISSION_REQUEST_CODE -> {
+                pendingMicrophonePermissionResult?.success(mapOf("granted" to granted))
+                pendingMicrophonePermissionResult = null
                 true
             }
             else -> false
@@ -130,6 +150,25 @@ class AssistantBridge(
         activity.requestPermissions(
             arrayOf(Manifest.permission.CALL_PHONE),
             CALL_PERMISSION_REQUEST_CODE,
+        )
+    }
+
+    private fun hasMicrophonePermission(): Boolean =
+        activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private fun requestMicrophonePermission(result: MethodChannel.Result) {
+        if (hasMicrophonePermission()) {
+            result.success(mapOf("granted" to true))
+            return
+        }
+        if (pendingMicrophonePermissionResult != null) {
+            result.error("permission_request_in_progress", "A microphone permission request is already active.", null)
+            return
+        }
+        pendingMicrophonePermissionResult = result
+        activity.requestPermissions(
+            arrayOf(Manifest.permission.RECORD_AUDIO),
+            MICROPHONE_PERMISSION_REQUEST_CODE,
         )
     }
 
@@ -212,6 +251,7 @@ class AssistantBridge(
 
     fun dispose() {
         tts.shutdown()
+        stt.shutdown()
     }
 
     private companion object {
@@ -219,6 +259,7 @@ class AssistantBridge(
         const val EVENT_CHANNEL = "com.example.voice_assistant/assistant_events"
         const val CONTACTS_PERMISSION_REQUEST_CODE = 4001
         const val CALL_PERMISSION_REQUEST_CODE = 4002
+        const val MICROPHONE_PERMISSION_REQUEST_CODE = 4003
     }
 }
 
