@@ -425,6 +425,99 @@ class AssistantController extends ChangeNotifier {
       }
     }
 
+    // Check if this is a CallCommand (direct calling behavior only - safe calling feature removed)
+    if (command is CallCommand) {
+      print('DIAG: AssistantController handling CallCommand with direct calling behavior');
+      try {
+        // Resolve the contact
+        final resolveResult = await _platform.resolveContacts(command.contactQuery);
+
+        if (resolveResult.hasNoMatches) {
+          // No contacts found
+          _setState(AssistantState.error);
+          _errorMessage = 'Contact not found: "${resolveResult.query}"';
+          _lastCommandParseResult = null; // Clear the command
+          return;
+        }
+
+        // Filter to exact name matches only
+        final exactMatchCandidates = resolveResult.candidates
+            .where((candidate) => candidate.isExactNameMatch)
+            .toList();
+
+        if (exactMatchCandidates.isEmpty) {
+          // No exact matches found
+          _setState(AssistantState.error);
+          _errorMessage = 'Contact not found: "${resolveResult.query}"';
+          _lastCommandParseResult = null; // Clear the command
+          return;
+        }
+
+        if (exactMatchCandidates.length > 1) {
+          // Multiple exact matches found - error (no fallback to selection)
+          _setState(AssistantState.error);
+          _errorMessage = 'Multiple exact matches found for "${resolveResult.query}". Please be more specific.';
+          _lastCommandParseResult = null; // Clear the command
+          return;
+        }
+
+        // Exactly one exact match
+        final candidate = exactMatchCandidates.first;
+        if (candidate.phoneNumbers.isEmpty) {
+          _setState(AssistantState.error);
+          _errorMessage = 'Contact "${candidate.displayName}" has no phone numbers';
+          _lastCommandParseResult = null;
+          return;
+        }
+
+        if (candidate.phoneNumbers.length > 1) {
+          // Multiple phone numbers for the exact match - error (no fallback to selection)
+          _setState(AssistantState.error);
+          _errorMessage = 'Contact "${candidate.displayName}" has multiple phone numbers. Please specify which number to call.';
+          _lastCommandParseResult = null; // Clear the command
+          return;
+        }
+
+        // Exactly one phone number - proceed with direct call
+        final phoneNumber = candidate.phoneNumbers.first;
+
+        // Prepare the call (gets confirmation token)
+        final prepareResult = await _platform.prepareCall(
+          contactId: candidate.contactId.toString(),
+          phoneNumber: phoneNumber,
+          displayName: candidate.displayName,
+        );
+
+        if (prepareResult.status == CallExecutionStatus.confirmationRequired) {
+          // Immediately confirm the call
+          final confirmResult = await _platform.confirmCall(
+            confirmationToken: prepareResult.confirmationToken!,
+            confirmed: true,
+          );
+
+          // Handle the confirm result
+          _handleExecutionResult(_convertCallExecutionResult(confirmResult));
+          return;
+        } else {
+          // Handle other prepare results (permission required, etc.)
+          _handleExecutionResult(_convertCallExecutionResult(prepareResult));
+          return;
+        }
+      } on PlatformException catch (e) {
+        print('DIAG: AssistantController direct call PlatformException: $e');
+        _setState(AssistantState.error);
+        _errorMessage = 'Direct call failed: ${e.message}';
+        // Preserve command for potential retry (similar to normal flow)
+        return;
+      } catch (e) {
+        print('DIAG: AssistantController direct call exception: $e');
+        _setState(AssistantState.error);
+        _errorMessage = 'Direct call failed: $e';
+        // Preserve command for potential retry (similar to normal flow)
+        return;
+      }
+    }
+
     print('DIAG: About to execute via orchestrator');
     print('DIAG: lastCommandParseResult before orchestrator: $_lastCommandParseResult');
     // Execute via orchestrator
