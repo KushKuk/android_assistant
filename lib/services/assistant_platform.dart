@@ -5,6 +5,8 @@ import 'package:voice_assistant/models/assistant_settings.dart';
 import 'package:voice_assistant/models/contact_candidate.dart';
 import 'package:voice_assistant/models/tts_result.dart';
 import 'package:voice_assistant/models/stt_result.dart';
+import 'package:voice_assistant/models/bluetooth_device_info.dart';
+import 'package:voice_assistant/models/bluetooth_result.dart';
 
 abstract interface class AssistantPlatform {
   Future<AssistantIntegrationStatus> getIntegrationStatus();
@@ -33,6 +35,16 @@ abstract interface class AssistantPlatform {
   Future<SttResult> cancelListening();
   Future<SttState> getSpeechRecognitionStatus();
   Stream<Map<Object?, Object?>> get events;
+
+  // Bluetooth methods
+  Future<BluetoothStatusResult> getBluetoothStatus();
+  Future<BluetoothActionResult> requestBluetoothEnable();
+  Future<BluetoothActionResult> requestBluetoothDisable();
+  Future<BluetoothDeviceListResult> getBluetoothDevices({
+    bool onlyBonded = false,
+  });
+  Future<BluetoothActionResult> connectBluetoothDevice(String deviceAddress);
+  Future<BluetoothActionResult> disconnectBluetoothDevice(String deviceAddress);
 }
 
 class MethodChannelAssistantPlatform implements AssistantPlatform {
@@ -51,23 +63,33 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
 
   @override
   Future<AssistantIntegrationStatus> getIntegrationStatus() async {
+    print('DIAG: Platform.getIntegrationStatus() entered');
     try {
       final result = await _methodChannel.invokeMethod<Object?>(
         'getIntegrationStatus',
       );
-      if (result is! Map) return const AssistantIntegrationStatus.unavailable();
-      return AssistantIntegrationStatus.fromMap(
+      print('DIAG: Platform.getIntegrationStatus() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.getIntegrationStatus() result not Map, returning unavailable');
+        return const AssistantIntegrationStatus.unavailable();
+      }
+      final status = AssistantIntegrationStatus.fromMap(
         Map<Object?, Object?>.from(result),
       );
-    } on PlatformException {
+      print('DIAG: Platform.getIntegrationStatus() returning: $status');
+      return status;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getIntegrationStatus() PlatformException: $e');
       return const AssistantIntegrationStatus.unavailable();
     } on MissingPluginException {
+      print('DIAG: Platform.getIntegrationStatus() MissingPluginException');
       return const AssistantIntegrationStatus.unavailable();
     }
   }
 
   @override
   Future<void> syncSettings(AssistantSettings settings) {
+    print('DIAG: Platform.syncSettings() entered');
     return _methodChannel.invokeMethod<void>('syncSettings', {
       'assistantName': settings.assistantName,
       'wakeWord': settings.wakeWord,
@@ -78,50 +100,72 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
       'language': settings.language,
       'wakeWordEnabled': settings.wakeWordEnabled,
       'voiceFeedbackEnabled': settings.voiceFeedbackEnabled,
+    }).then((_) {
+      print('DIAG: Platform.syncSettings() completed');
+    }).catchError((e) {
+      print('DIAG: Platform.syncSettings() error: $e');
+      throw e;
     });
   }
 
   @override
   Future<bool> hasContactsPermission() async {
-    return await _methodChannel.invokeMethod<bool>('hasContactsPermission') ??
+    print('DIAG: Platform.hasContactsPermission() entered');
+    final result = await _methodChannel.invokeMethod<bool>('hasContactsPermission') ??
         false;
+    print('DIAG: Platform.hasContactsPermission() returning: $result');
+    return result;
   }
 
   @override
   Future<bool> requestContactsPermission() async {
+    print('DIAG: Platform.requestContactsPermission() entered');
     final result = await _methodChannel.invokeMethod<Object?>(
       'requestContactsPermission',
     );
-    return result is Map && result['granted'] == true;
+    final granted = result is Map && result['granted'] == true;
+    print('DIAG: Platform.requestContactsPermission() returning: $granted');
+    return granted;
   }
 
   @override
   Future<ContactSearchResult> resolveContacts(String query) async {
+    print('DIAG: Platform.resolveContacts() entered with query: $query');
     final result = await _methodChannel.invokeMethod<Object?>(
       'resolveContacts',
       {'query': query},
     );
+    print('DIAG: Platform.resolveContacts() got result: $result');
     if (result is! Map) {
+      print('DIAG: Platform.resolveContacts() result not Map, throwing PlatformException');
       throw PlatformException(
         code: 'invalid_contact_response',
         message: 'Android returned an invalid contact search result.',
       );
     }
-    return ContactSearchResult.fromMap(Map<Object?, Object?>.from(result));
+    final contactResult = ContactSearchResult.fromMap(Map<Object?, Object?>.from(result));
+    print('DIAG: Platform.resolveContacts() returning: $contactResult');
+    return contactResult;
   }
 
   @override
   Future<bool> hasCallPermission() async {
-    return await _methodChannel.invokeMethod<bool>('hasCallPermission') ??
+    print('DIAG: Platform.hasCallPermission() entered');
+    final result = await _methodChannel.invokeMethod<bool>('hasCallPermission') ??
         false;
+    print('DIAG: Platform.hasCallPermission() returning: $result');
+    return result;
   }
 
   @override
   Future<bool> requestCallPermission() async {
+    print('DIAG: Platform.requestCallPermission() entered');
     final result = await _methodChannel.invokeMethod<Object?>(
       'requestCallPermission',
     );
-    return result is Map && result['granted'] == true;
+    final granted = result is Map && result['granted'] == true;
+    print('DIAG: Platform.requestCallPermission() returning: $granted');
+    return granted;
   }
 
   @override
@@ -130,11 +174,14 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
     String? phoneNumber,
     String? displayName,
   }) {
-    return _invokeCallResult('prepareCall', {
+    print('DIAG: Platform.prepareCall() entered with contactId: $contactId, phoneNumber: $phoneNumber, displayName: $displayName');
+    final result = _invokeCallResult('prepareCall', {
       'contactId': contactId,
       'phoneNumber': phoneNumber,
       'displayName': displayName,
     });
+    print('DIAG: Platform.prepareCall() got result: $result');
+    return result;
   }
 
   @override
@@ -142,32 +189,42 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
     required String confirmationToken,
     required bool confirmed,
   }) {
-    return _invokeCallResult('confirmCall', {
+    print('DIAG: Platform.confirmCall() entered with token: $confirmationToken, confirmed: $confirmed');
+    final result = _invokeCallResult('confirmCall', {
       'confirmationToken': confirmationToken,
       'confirmed': confirmed,
     });
+    print('DIAG: Platform.confirmCall() got result: $result');
+    return result;
   }
 
   Future<CallExecutionResult> _invokeCallResult(
     String method,
     Map<String, Object?> arguments,
   ) async {
+    print('DIAG: Platform._invokeCallResult() entered with method: $method, arguments: $arguments');
     final result = await _methodChannel.invokeMethod<Object?>(
       method,
       arguments,
     );
+    print('DIAG: Platform._invokeCallResult() got result: $result');
     if (result is! Map) {
+      print('DIAG: Platform._invokeCallResult() result not Map, throwing PlatformException');
       throw PlatformException(
         code: 'invalid_call_response',
         message: 'Android returned an invalid call result.',
       );
     }
-    return CallExecutionResult.fromMap(Map<Object?, Object?>.from(result));
+    final callResult = CallExecutionResult.fromMap(Map<Object?, Object?>.from(result));
+    print('DIAG: Platform._invokeCallResult() returning: $callResult');
+    return callResult;
   }
 
   @override
   Future<TtsSpeakResult> speak(String text) async {
+    print('DIAG: Platform.speak() entered with text: $text');
     if (text.trim().isEmpty) {
+      print('DIAG: Platform.speak() empty text');
       return const TtsSpeakResult(
         success: false,
         message: 'Text must not be empty.',
@@ -178,14 +235,19 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
         'speak',
         {'text': text},
       );
+      print('DIAG: Platform.speak() got result: $result');
       if (result is! Map) {
+        print('DIAG: Platform.speak() result not Map');
         return const TtsSpeakResult(
           success: false,
           message: 'Invalid TTS response from Android.',
         );
       }
-      return TtsSpeakResult.fromMap(Map<Object?, Object?>.from(result));
+      final speakResult = TtsSpeakResult.fromMap(Map<Object?, Object?>.from(result));
+      print('DIAG: Platform.speak() returning: $speakResult');
+      return speakResult;
     } on PlatformException catch (e) {
+      print('DIAG: Platform.speak() PlatformException: $e');
       return TtsSpeakResult(
         success: false,
         message: e.message ?? 'TTS request failed.',
@@ -195,53 +257,75 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
 
   @override
   Future<void> stopSpeaking() async {
+    print('DIAG: Platform.stopSpeaking() entered');
     try {
       await _methodChannel.invokeMethod<void>('stopSpeaking');
-    } on PlatformException {
+      print('DIAG: Platform.stopSpeaking() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.stopSpeaking() PlatformException: $e');
       // Best-effort: speech may have already completed.
     } on MissingPluginException {
+      print('DIAG: Platform.stopSpeaking() MissingPluginException');
       // Non-Android platform.
     }
   }
 
   @override
   Future<TtsState> getTtsStatus() async {
+    print('DIAG: Platform.getTtsStatus() entered');
     try {
       final result = await _methodChannel.invokeMethod<String>('getTtsStatus');
-      return TtsState.fromName(result ?? 'unavailable');
-    } on PlatformException {
+      print('DIAG: Platform.getTtsStatus() got result: $result');
+      final status = TtsState.fromName(result ?? 'unavailable');
+      print('DIAG: Platform.getTtsStatus() returning: $status');
+      return status;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getTtsStatus() PlatformException: $e');
       return TtsState.unavailable;
     } on MissingPluginException {
+      print('DIAG: Platform.getTtsStatus() MissingPluginException');
       return TtsState.unavailable;
     }
   }
 
   @override
   Future<bool> hasMicrophonePermission() async {
-    return await _methodChannel.invokeMethod<bool>('hasMicrophonePermission') ??
+    print('DIAG: Platform.hasMicrophonePermission() entered');
+    final result = await _methodChannel.invokeMethod<bool>('hasMicrophonePermission') ??
         false;
+    print('DIAG: Platform.hasMicrophonePermission() returning: $result');
+    return result;
   }
 
   @override
   Future<bool> requestMicrophonePermission() async {
+    print('DIAG: Platform.requestMicrophonePermission() entered');
     final result = await _methodChannel.invokeMethod<Object?>(
       'requestMicrophonePermission',
     );
-    return result is Map && result['granted'] == true;
+    final granted = result is Map && result['granted'] == true;
+    print('DIAG: Platform.requestMicrophonePermission() returning: $granted');
+    return granted;
   }
 
   @override
   Future<SttResult> startListening() async {
+    print('DIAG: Platform.startListening() entered');
     try {
       final result = await _methodChannel.invokeMethod<Object?>('startListening');
+      print('DIAG: Platform.startListening() got result: $result');
       if (result is! Map) {
+        print('DIAG: Platform.startListening() result not Map');
         return const SttResult(
           success: false,
           message: 'Invalid STT response from Android.',
         );
       }
-      return SttResult.fromMap(Map<Object?, Object?>.from(result));
+      final sttResult = SttResult.fromMap(Map<Object?, Object?>.from(result));
+      print('DIAG: Platform.startListening() returning: $sttResult');
+      return sttResult;
     } on PlatformException catch (e) {
+      print('DIAG: Platform.startListening() PlatformException: $e');
       if (e.code == 'permission_required') {
         return const SttResult(
           success: false,
@@ -257,35 +341,198 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
 
   @override
   Future<SttResult> stopListening() async {
+    print('DIAG: Platform.stopListening() entered');
     try {
       final result = await _methodChannel.invokeMethod<Object?>('stopListening');
-      if (result is! Map) return const SttResult(success: false);
-      return SttResult.fromMap(Map<Object?, Object?>.from(result));
+      print('DIAG: Platform.stopListening() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.stopListening() result not Map');
+        return const SttResult(success: false);
+      }
+      final sttResult = SttResult.fromMap(Map<Object?, Object?>.from(result));
+      print('DIAG: Platform.stopListening() returning: $sttResult');
+      return sttResult;
     } on PlatformException catch (e) {
+      print('DIAG: Platform.stopListening() PlatformException: $e');
       return SttResult(success: false, message: e.message);
     }
   }
 
   @override
   Future<SttResult> cancelListening() async {
+    print('DIAG: Platform.cancelListening() entered');
     try {
       final result = await _methodChannel.invokeMethod<Object?>('cancelListening');
-      if (result is! Map) return const SttResult(success: false);
-      return SttResult.fromMap(Map<Object?, Object?>.from(result));
+      print('DIAG: Platform.cancelListening() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.cancelListening() result not Map');
+        return const SttResult(success: false);
+      }
+      final sttResult = SttResult.fromMap(Map<Object?, Object?>.from(result));
+      print('DIAG: Platform.cancelListening() returning: $sttResult');
+      return sttResult;
     } on PlatformException catch (e) {
+      print('DIAG: Platform.cancelListening() PlatformException: $e');
       return SttResult(success: false, message: e.message);
     }
   }
 
   @override
   Future<SttState> getSpeechRecognitionStatus() async {
+    print('DIAG: Platform.getSpeechRecognitionStatus() entered');
     try {
       final result = await _methodChannel.invokeMethod<String>('getSpeechRecognitionStatus');
-      return SttState.fromName(result ?? 'unavailable');
-    } on PlatformException {
+      print('DIAG: Platform.getSpeechRecognitionStatus() got result: $result');
+      final status = SttState.fromName(result ?? 'unavailable');
+      print('DIAG: Platform.getSpeechRecognitionStatus() returning: $status');
+      return status;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getSpeechRecognitionStatus() PlatformException: $e');
       return SttState.unavailable;
     } on MissingPluginException {
+      print('DIAG: Platform.getSpeechRecognitionStatus() MissingPluginException');
       return SttState.unavailable;
+    }
+  }
+
+  // Bluetooth methods
+  @override
+  Future<BluetoothStatusResult> getBluetoothStatus() async {
+    print('DIAG: Platform.getBluetoothStatus() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('getBluetoothStatus');
+      print('DIAG: Platform.getBluetoothStatus() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.getBluetoothStatus() result not Map');
+        return const BluetoothStatusResult(status: BluetoothStatus.disabled, message: 'Invalid response from Android');
+      }
+      final statusResult = BluetoothStatusResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.getBluetoothStatus() returning: $statusResult');
+      return statusResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getBluetoothStatus() PlatformException: $e');
+      return BluetoothStatusResult(status: BluetoothStatus.disabled, message: e.message ?? 'Failed to get Bluetooth status');
+    } on MissingPluginException {
+      print('DIAG: Platform.getBluetoothStatus() MissingPluginException');
+      return const BluetoothStatusResult(status: BluetoothStatus.unavailable, message: 'Bluetooth not available on this platform');
+    }
+  }
+
+  @override
+  Future<BluetoothActionResult> requestBluetoothEnable() async {
+    print('DIAG: Platform.requestBluetoothEnable() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('requestBluetoothEnable');
+      print('DIAG: Platform.requestBluetoothEnable() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.requestBluetoothEnable() result not Map');
+        return const BluetoothActionResult(status: BluetoothActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = BluetoothActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.requestBluetoothEnable() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.requestBluetoothEnable() PlatformException: $e');
+      return BluetoothActionResult(status: BluetoothActionStatus.failure, message: e.message ?? 'Failed to request Bluetooth enable');
+    } on MissingPluginException {
+      print('DIAG: Platform.requestBluetoothEnable() MissingPluginException');
+      return const BluetoothActionResult(status: BluetoothActionStatus.unsupported, message: 'Bluetooth not available on this platform');
+    }
+  }
+
+  @override
+  Future<BluetoothActionResult> requestBluetoothDisable() async {
+    print('DIAG: Platform.requestBluetoothDisable() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('requestBluetoothDisable');
+      print('DIAG: Platform.requestBluetoothDisable() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.requestBluetoothDisable() result not Map');
+        return const BluetoothActionResult(status: BluetoothActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = BluetoothActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.requestBluetoothDisable() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.requestBluetoothDisable() PlatformException: $e');
+      return BluetoothActionResult(status: BluetoothActionStatus.failure, message: e.message ?? 'Failed to request Bluetooth disable');
+    } on MissingPluginException {
+      print('DIAG: Platform.requestBluetoothDisable() MissingPluginException');
+      return const BluetoothActionResult(status: BluetoothActionStatus.unsupported, message: 'Bluetooth not available on this platform');
+    }
+  }
+
+  @override
+  Future<BluetoothDeviceListResult> getBluetoothDevices({
+    bool onlyBonded = false,
+  }) async {
+    print('DIAG: Platform.getBluetoothDevices() entered with onlyBonded: $onlyBonded');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('getBluetoothDevices', {
+        'onlyBonded': onlyBonded,
+      });
+      print('DIAG: Platform.getBluetoothDevices() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.getBluetoothDevices() result not Map');
+        return const BluetoothDeviceListResult(devices: [], message: 'Invalid response from Android');
+      }
+      final deviceListResult = BluetoothDeviceListResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.getBluetoothDevices() returning: $deviceListResult');
+      return deviceListResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getBluetoothDevices() PlatformException: $e');
+      return BluetoothDeviceListResult(devices: [], message: e.message ?? 'Failed to get Bluetooth devices');
+    } on MissingPluginException {
+      print('DIAG: Platform.getBluetoothDevices() MissingPluginException');
+      return const BluetoothDeviceListResult(devices: [], message: 'Bluetooth not available on this platform');
+    }
+  }
+
+  @override
+  Future<BluetoothActionResult> connectBluetoothDevice(String deviceAddress) async {
+    print('DIAG: Platform.connectBluetoothDevice() entered with deviceAddress: $deviceAddress');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('connectBluetoothDevice', {
+        'deviceAddress': deviceAddress,
+      });
+      print('DIAG: Platform.connectBluetoothDevice() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.connectBluetoothDevice() result not Map');
+        return const BluetoothActionResult(status: BluetoothActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = BluetoothActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.connectBluetoothDevice() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.connectBluetoothDevice() PlatformException: $e');
+      return BluetoothActionResult(status: BluetoothActionStatus.failure, message: e.message ?? 'Failed to connect to Bluetooth device');
+    } on MissingPluginException {
+      print('DIAG: Platform.connectBluetoothDevice() MissingPluginException');
+      return const BluetoothActionResult(status: BluetoothActionStatus.unsupported, message: 'Bluetooth not available on this platform');
+    }
+  }
+
+  @override
+  Future<BluetoothActionResult> disconnectBluetoothDevice(String deviceAddress) async {
+    print('DIAG: Platform.disconnectBluetoothDevice() entered with deviceAddress: $deviceAddress');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('disconnectBluetoothDevice', {
+        'deviceAddress': deviceAddress,
+      });
+      print('DIAG: Platform.disconnectBluetoothDevice() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.disconnectBluetoothDevice() result not Map');
+        return const BluetoothActionResult(status: BluetoothActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = BluetoothActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.disconnectBluetoothDevice() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.disconnectBluetoothDevice() PlatformException: $e');
+      return BluetoothActionResult(status: BluetoothActionStatus.failure, message: e.message ?? 'Failed to disconnect from Bluetooth device');
+    } on MissingPluginException {
+      print('DIAG: Platform.disconnectBluetoothDevice() MissingPluginException');
+      return const BluetoothActionResult(status: BluetoothActionStatus.unsupported, message: 'Bluetooth not available on this platform');
     }
   }
 }

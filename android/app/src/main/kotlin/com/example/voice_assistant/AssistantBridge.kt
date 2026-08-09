@@ -2,9 +2,13 @@ package com.example.voice_assistant
 
 import android.Manifest
 import android.app.Activity
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
+import com.example.voice_assistant.bluetooth.BluetoothManager
 import com.example.voice_assistant.calls.CallRequest
 import com.example.voice_assistant.calls.SafeCallPipeline
 import com.example.voice_assistant.contacts.ContactResolver
@@ -27,6 +31,7 @@ class AssistantBridge(
     private val safeCallPipeline = SafeCallPipeline(activity, contactResolver)
     private val tts = AssistantTextToSpeech(activity.applicationContext) { eventSink }
     private val stt = AssistantSpeechRecognizer(activity.applicationContext) { eventSink }
+    private val bluetoothManager = BluetoothManager(activity, activity)
     private var eventSink: EventChannel.EventSink? = null
     private var pendingContactsPermissionResult: MethodChannel.Result? = null
     private var pendingCallPermissionResult: MethodChannel.Result? = null
@@ -70,6 +75,40 @@ class AssistantBridge(
             "stopListening" -> result.success(stt.stopListening())
             "cancelListening" -> result.success(stt.cancelListening())
             "getSpeechRecognitionStatus" -> result.success(stt.getStatus())
+
+            // Bluetooth methods
+            "getBluetoothStatus" -> result.success(getBluetoothStatus().toMap())
+            "requestBluetoothEnable" -> result.success(requestBluetoothEnable().toMap())
+            "requestBluetoothDisable" -> result.success(requestBluetoothDisable().toMap())
+            "getBluetoothDevices" -> {
+                val arguments = call.arguments as? Map<*, *>
+                val onlyBonded = arguments?.get("onlyBonded") as? Boolean ?: false
+                result.success(getBluetoothDevices(onlyBonded).toMap())
+            }
+            "connectBluetoothDevice" -> {
+                val arguments = call.arguments as? Map<*, *> ?: run {
+                    result.error("invalid_arguments", "Device address is required.", null)
+                    return
+                }
+                val deviceAddress = arguments["deviceAddress"] as? String
+                if (deviceAddress.isNullOrBlank()) {
+                    result.error("invalid_arguments", "Device address must not be empty.", null)
+                    return
+                }
+                result.success(connectBluetoothDevice(deviceAddress).toMap())
+            }
+            "disconnectBluetoothDevice" -> {
+                val arguments = call.arguments as? Map<*, *> ?: run {
+                    result.error("invalid_arguments", "Device address is required.", null)
+                    return
+                }
+                val deviceAddress = arguments["deviceAddress"] as? String
+                if (deviceAddress.isNullOrBlank()) {
+                    result.error("invalid_arguments", "Device address must not be empty.", null)
+                    return
+                }
+                result.success(disconnectBluetoothDevice(deviceAddress).toMap())
+            }
             else -> result.notImplemented()
         }
     }
@@ -252,6 +291,58 @@ class AssistantBridge(
     fun dispose() {
         tts.shutdown()
         stt.shutdown()
+    }
+
+    // Bluetooth methods
+    @SuppressLint("MissingPermission")
+    private fun getBluetoothStatus(): Map<String, Any> {
+        Log.d("AssistantBridge", "getBluetoothStatus() entered")
+        val result = bluetoothManager.getBluetoothStatus().toMap()
+        Log.d("AssistantBridge", "getBluetoothStatus() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun requestBluetoothEnable(): Map<String, Any> {
+        Log.d("AssistantBridge", "requestBluetoothEnable() entered")
+        val result = bluetoothManager.requestBluetoothEnable().toMap()
+        Log.d("AssistantBridge", "requestBluetoothEnable() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun requestBluetoothDisable(): Map<String, Any> {
+        Log.d("AssistantBridge", "requestBluetoothDisable() entered")
+        val result = bluetoothManager.requestBluetoothDisable().toMap()
+        Log.d("AssistantBridge", "requestBluetoothDisable() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun getBluetoothDevices(onlyBonded: Boolean): Map<String, Any> {
+        Log.d("AssistantBridge", "getBluetoothDevices() entered with onlyBonded: $onlyBonded")
+        // Note: The BluetoothManager currently only supports getting bonded devices
+        // For now, we ignore the onlyBonded parameter and always return bonded devices
+        // In a more complete implementation, we would add scanning capabilities
+        val result = bluetoothManager.getBondedDevices().toMap()
+        Log.d("AssistantBridge", "getBluetoothDevices() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun connectBluetoothDevice(deviceAddress: String): Map<String, Any> {
+        Log.d("AssistantBridge", "connectBluetoothDevice() entered with deviceAddress: $deviceAddress")
+        val result = bluetoothManager.connectDevice(deviceAddress).toMap()
+        Log.d("AssistantBridge", "connectBluetoothDevice() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun disconnectBluetoothDevice(deviceAddress: String): Map<String, Any> {
+        Log.d("AssistantBridge", "disconnectBluetoothDevice() entered with deviceAddress: $deviceAddress")
+        val result = bluetoothManager.disconnectDevice(deviceAddress).toMap()
+        Log.d("AssistantBridge", "disconnectBluetoothDevice() returning: $result")
+        return result
     }
 
     private companion object {

@@ -13,11 +13,11 @@ class AssistantSettings {
     required this.voiceFeedbackEnabled,
   });
 
-  static const defaultAssistantName = 'Chinaar';
+  static const defaultAssistantName = 'JARVIS';
 
   factory AssistantSettings.defaults() => const AssistantSettings(
     assistantName: defaultAssistantName,
-    wakeWord: 'Hey Chinaar',
+    wakeWord: 'Hey JARVIS',
     callingMode: CallingMode.safe,
     voice: 'Default',
     speechRate: 1,

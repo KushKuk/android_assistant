@@ -4,11 +4,11 @@ import 'package:voice_assistant/models/assistant_settings.dart';
 import 'package:voice_assistant/models/contact_candidate.dart';
 
 void main() {
-  test('defaults use the Chinaar identity', () {
+  test('defaults use the JARVIS identity', () {
     final settings = AssistantSettings.defaults();
 
-    expect(settings.assistantName, 'Chinaar');
-    expect(settings.wakeWord, 'Hey Chinaar');
+    expect(settings.assistantName, 'JARVIS');
+    expect(settings.wakeWord, 'Hey JARVIS');
     expect(settings.callingMode, CallingMode.safe);
   });
 
@@ -18,7 +18,7 @@ void main() {
     );
 
     expect(changed.assistantName, 'Atlas');
-    expect(changed.wakeWord, 'Hey Chinaar');
+    expect(changed.wakeWord, 'Hey JARVIS');
   });
 
   test('contact search results preserve candidate phone numbers', () {

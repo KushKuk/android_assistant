@@ -1,0 +1,140 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:voice_assistant/services/assistant_controller.dart';
+import 'package:voice_assistant/services/settings_repository.dart';
+import 'package:voice_assistant/models/assistant_settings.dart';
+import 'package:voice_assistant/services/assistant_platform.dart';
+
+class MockSettingsRepository implements SettingsRepository {
+  @override
+  Future<void> save(AssistantSettings settings) async {}
+
+  @override
+  AssistantSettings load() => AssistantSettings.defaults();
+}
+
+class MockAssistantPlatform implements AssistantPlatform {
+  final _eventController = StreamController<Map<Object?, Object?>>.broadcast();
+
+  bool hasMicPermission = true;
+  bool requestMicPermissionResult = true;
+  bool hasContactPermission = true;
+  bool requestContactPermissionResult = true;
+
+  @override
+  Stream<Map<Object?, Object?>> get events => _eventController.stream;
+
+  void emitEvent(Map<String, dynamic> event) {
+    _eventController.add(event);
+  }
+
+  @override
+  Future<SttResult> cancelListening() async => const SttResult(success: true);
+
+  @override
+  Future<CallExecutionResult> confirmCall({required String confirmationToken, required bool confirmed}) async {
+    return const CallExecutionResult(status: CallExecutionStatus.callFailed, message: 'Failed');
+  }
+
+  @override
+  Future<AssistantIntegrationStatus> getIntegrationStatus() async {
+    return const AssistantIntegrationStatus.unavailable();
+  }
+
+  @override
+  Future<TtsState> getTtsStatus() async => TtsState.idle;
+
+  @override
+  Future<bool> hasMicrophonePermission() async => hasMicPermission;
+
+  @override
+  Future<bool> hasCallPermission() async => true;
+
+  @override
+  Future<bool> hasContactsPermission() async => hasContactPermission;
+
+  @override
+  Future<bool> requestCallPermission() async => true;
+
+  @override
+  Future<bool> requestContactsPermission() async => requestContactPermissionResult;
+
+  @override
+  Future<CallExecutionResult> prepareCall({String? contactId, String? displayName, String? phoneNumber}) async {
+    return const CallExecutionResult(status: CallExecutionStatus.callFailed, message: 'Failed');
+  }
+
+  @override
+  Future<bool> requestMicrophonePermission() async => requestMicPermissionResult;
+
+  @override
+  Future<ContactSearchResult> resolveContacts(String query) async {
+    return ContactSearchResult(query: query, candidates: []);
+  }
+
+  @override
+  Future<TtsSpeakResult> speak(String text) async => const TtsSpeakResult(success: true);
+
+  @override
+  Future<void> stopSpeaking() async {}
+
+  @override
+  Future<void> syncSettings(AssistantSettings settings) async {}
+
+  @override
+  Future<SttResult> startListening() async => const SttResult(success: true);
+
+  @override
+  Future<SttResult> stopListening() async => const SttResult(success: true);
+
+  // Bluetooth methods
+  @override
+  Future<BluetoothStatusResult> getBluetoothStatus() async =>
+      const BluetoothStatusResult(status: BluetoothStatus.disabled);
+
+  @override
+  Future<BluetoothActionResult> requestBluetoothEnable() async =>
+      const BluetoothActionResult(status: BluetoothActionStatus.success);
+
+  @override
+  Future<BluetoothActionResult> requestBluetoothDisable() async =>
+      const BluetoothActionResult(status: BluetoothActionStatus.success);
+
+  @override
+  Future<BluetoothDeviceListResult> getBluetoothDevices({bool onlyBonded = false}) async =>
+      const BluetoothDeviceListResult(devices: [], message: '');
+
+  @override
+  Future<BluetoothActionResult> connectBluetoothDevice(String deviceAddress) async =>
+      const BluetoothActionResult(status: BluetoothActionStatus.success);
+
+  @override
+  Future<BluetoothActionResult> disconnectBluetoothDevice(String deviceAddress) async =>
+      const BluetoothActionResult(status: BluetoothActionStatus.success);
+}
+
+void main() {
+  test('timing test', () async {
+    final repository = MockSettingsRepository();
+    final platform = MockAssistantPlatform();
+    final defaultSettings = AssistantSettings.defaults();
+    final controller = AssistantController(repository, defaultSettings, platform);
+
+    await controller.initializeNativeBridge();
+    await controller.startListening();
+    platform.emitEvent({'type': 'listening_started'});
+
+    platform.emitEvent({'type': 'final_transcript', 'text': 'Call Mom'});
+    // Add a slight delay to let things settle
+    await Future.delayed(const Duration(milliseconds: 10));
+
+    print('State: ${controller.state}');
+    print('Has pending command: ${controller.hasPendingCommand}');
+    print('Last command parse result: ${controller.lastCommandParseResult}');
+    if (controller.lastCommandParseResult != null) {
+      print('Is parsed: ${controller.lastCommandParseResult!.isParsed}');
+      if (controller.lastCommandParseResult!.isParsed) {
+        print('Command: ${controller.lastCommandParseResult!.command}');
+      }
+    }
+  });
+}

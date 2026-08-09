@@ -20,6 +20,15 @@ class ContactCandidate {
       isExactNameMatch: map['isExactNameMatch'] == true,
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'contactId': contactId,
+      'displayName': displayName,
+      'phoneNumbers': phoneNumbers,
+      'isExactNameMatch': isExactNameMatch,
+    };
+  }
 }
 
 class ContactSearchResult {
