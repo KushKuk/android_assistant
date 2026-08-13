@@ -7,6 +7,10 @@ import 'package:voice_assistant/models/tts_result.dart';
 import 'package:voice_assistant/models/stt_result.dart';
 import 'package:voice_assistant/models/bluetooth_device_info.dart';
 import 'package:voice_assistant/models/bluetooth_result.dart';
+import 'package:voice_assistant/models/wifi_result.dart';
+import 'package:voice_assistant/models/mobile_data_result.dart';
+import 'package:voice_assistant/models/hotspot_result.dart';
+import 'package:voice_assistant/models/settings_result.dart';
 
 abstract interface class AssistantPlatform {
   Future<AssistantIntegrationStatus> getIntegrationStatus();
@@ -45,6 +49,17 @@ abstract interface class AssistantPlatform {
   });
   Future<BluetoothActionResult> connectBluetoothDevice(String deviceAddress);
   Future<BluetoothActionResult> disconnectBluetoothDevice(String deviceAddress);
+
+  // Connectivity methods
+  Future<WifiStatusResult> getWifiStatus();
+  Future<WifiActionResult> setWifiEnabled(bool enabled);
+  Future<MobileDataStatusResult> getMobileDataStatus();
+  Future<MobileDataActionResult> setMobileDataEnabled(bool enabled);
+  Future<HotspotStatusResult> getHotspotStatus();
+  Future<HotspotActionResult> setHotspotEnabled(bool enabled);
+  Future<SettingsActionResult> openWifiSettings();
+  Future<SettingsActionResult> openMobileDataSettings();
+  Future<SettingsActionResult> openHotspotSettings();
 }
 
 class MethodChannelAssistantPlatform implements AssistantPlatform {
@@ -93,7 +108,6 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
     return _methodChannel.invokeMethod<void>('syncSettings', {
       'assistantName': settings.assistantName,
       'wakeWord': settings.wakeWord,
-      'callingMode': settings.callingMode.name,
       'voice': settings.voice,
       'speechRate': settings.speechRate,
       'speechPitch': settings.speechPitch,
@@ -533,6 +547,208 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
     } on MissingPluginException {
       print('DIAG: Platform.disconnectBluetoothDevice() MissingPluginException');
       return const BluetoothActionResult(status: BluetoothActionStatus.unsupported, message: 'Bluetooth not available on this platform');
+    }
+  }
+
+  // Connectivity methods implementation
+  @override
+  Future<WifiStatusResult> getWifiStatus() async {
+    print('DIAG: Platform.getWifiStatus() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('getWifiStatus');
+      print('DIAG: Platform.getWifiStatus() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.getWifiStatus() result not Map');
+        return const WifiStatusResult(status: WifiStatus.disabled, message: 'Invalid response from Android');
+      }
+      final statusResult = WifiStatusResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.getWifiStatus() returning: $statusResult');
+      return statusResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getWifiStatus() PlatformException: $e');
+      return WifiStatusResult(status: WifiStatus.disabled, message: e.message ?? 'Failed to get Wi-Fi status');
+    } on MissingPluginException {
+      print('DIAG: Platform.getWifiStatus() MissingPluginException');
+      return const WifiStatusResult(status: WifiStatus.unavailable, message: 'Wi-Fi not available on this platform');
+    }
+  }
+
+  @override
+  Future<WifiActionResult> setWifiEnabled(bool enabled) async {
+    print('DIAG: Platform.setWifiEnabled() entered with enabled: $enabled');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>(
+          enabled ? 'enableWifi' : 'disableWifi', {});
+      print('DIAG: Platform.setWifiEnabled() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.setWifiEnabled() result not Map');
+        return const WifiActionResult(status: WifiActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = WifiActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.setWifiEnabled() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.setWifiEnabled() PlatformException: $e');
+      return WifiActionResult(status: WifiActionStatus.failure, message: e.message ?? 'Failed to ${enabled ? 'enable' : 'disable'} Wi-Fi');
+    } on MissingPluginException {
+      print('DIAG: Platform.setWifiEnabled() MissingPluginException');
+      return const WifiActionResult(status: WifiActionStatus.unsupported, message: 'Wi-Fi not available on this platform');
+    }
+  }
+
+  @override
+  Future<MobileDataStatusResult> getMobileDataStatus() async {
+    print('DIAG: Platform.getMobileDataStatus() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('getMobileDataStatus');
+      print('DIAG: Platform.getMobileDataStatus() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.getMobileDataStatus() result not Map');
+        return const MobileDataStatusResult(status: MobileDataStatus.disabled, message: 'Invalid response from Android');
+      }
+      final statusResult = MobileDataStatusResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.getMobileDataStatus() returning: $statusResult');
+      return statusResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getMobileDataStatus() PlatformException: $e');
+      return MobileDataStatusResult(status: MobileDataStatus.disabled, message: e.message ?? 'Failed to get mobile data status');
+    } on MissingPluginException {
+      print('DIAG: Platform.getMobileDataStatus() MissingPluginException');
+      return const MobileDataStatusResult(status: MobileDataStatus.unavailable, message: 'Mobile data not available on this platform');
+    }
+  }
+
+  @override
+  Future<MobileDataActionResult> setMobileDataEnabled(bool enabled) async {
+    print('DIAG: Platform.setMobileDataEnabled() entered with enabled: $enabled');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>(
+          enabled ? 'enableMobileData' : 'disableMobileData', {});
+      print('DIAG: Platform.setMobileDataEnabled() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.setMobileDataEnabled() result not Map');
+        return const MobileDataActionResult(status: MobileDataActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = MobileDataActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.setMobileDataEnabled() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.setMobileDataEnabled() PlatformException: $e');
+      return MobileDataActionResult(status: MobileDataActionStatus.failure, message: e.message ?? 'Failed to ${enabled ? 'enable' : 'disable'} mobile data');
+    } on MissingPluginException {
+      print('DIAG: Platform.setMobileDataEnabled() MissingPluginException');
+      return const MobileDataActionResult(status: MobileDataActionStatus.unsupported, message: 'Mobile data control not available on this platform');
+    }
+  }
+
+  @override
+  Future<HotspotStatusResult> getHotspotStatus() async {
+    print('DIAG: Platform.getHotspotStatus() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('getHotspotStatus');
+      print('DIAG: Platform.getHotspotStatus() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.getHotspotStatus() result not Map');
+        return const HotspotStatusResult(status: HotspotStatus.disabled, message: 'Invalid response from Android');
+      }
+      final statusResult = HotspotStatusResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.getHotspotStatus() returning: $statusResult');
+      return statusResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getHotspotStatus() PlatformException: $e');
+      return HotspotStatusResult(status: HotspotStatus.disabled, message: e.message ?? 'Failed to get hotspot status');
+    } on MissingPluginException {
+      print('DIAG: Platform.getHotspotStatus() MissingPluginException');
+      return const HotspotStatusResult(status: HotspotStatus.unavailable, message: 'Hotspot not available on this platform');
+    }
+  }
+
+  @override
+  Future<HotspotActionResult> setHotspotEnabled(bool enabled) async {
+    print('DIAG: Platform.setHotspotEnabled() entered with enabled: $enabled');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>(
+          enabled ? 'enableHotspot' : 'disableHotspot', {});
+      print('DIAG: Platform.setHotspotEnabled() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.setHotspotEnabled() result not Map');
+        return const HotspotActionResult(status: HotspotActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = HotspotActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.setHotspotEnabled() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.setHotspotEnabled() PlatformException: $e');
+      return HotspotActionResult(status: HotspotActionStatus.failure, message: e.message ?? 'Failed to ${enabled ? 'enable' : 'disable'} hotspot');
+    } on MissingPluginException {
+      print('DIAG: Platform.setHotspotEnabled() MissingPluginException');
+      return const HotspotActionResult(status: HotspotActionStatus.unsupported, message: 'Hotspot control not available on this platform');
+    }
+  }
+
+  @override
+  Future<SettingsActionResult> openWifiSettings() async {
+    print('DIAG: Platform.openWifiSettings() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('openWifiSettings');
+      print('DIAG: Platform.openWifiSettings() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.openWifiSettings() result not Map');
+        return const SettingsActionResult(status: SettingsActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = SettingsActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.openWifiSettings() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.openWifiSettings() PlatformException: $e');
+      return SettingsActionResult(status: SettingsActionStatus.failure, message: e.message ?? 'Failed to open Wi-Fi settings');
+    } on MissingPluginException {
+      print('DIAG: Platform.openWifiSettings() MissingPluginException');
+      return const SettingsActionResult(status: SettingsActionStatus.failure, message: 'Settings not available on this platform');
+    }
+  }
+
+  @override
+  Future<SettingsActionResult> openMobileDataSettings() async {
+    print('DIAG: Platform.openMobileDataSettings() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('openMobileDataSettings');
+      print('DIAG: Platform.openMobileDataSettings() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.openMobileDataSettings() result not Map');
+        return const SettingsActionResult(status: SettingsActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = SettingsActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.openMobileDataSettings() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.openMobileDataSettings() PlatformException: $e');
+      return SettingsActionResult(status: SettingsActionStatus.failure, message: e.message ?? 'Failed to open mobile data settings');
+    } on MissingPluginException {
+      print('DIAG: Platform.openMobileDataSettings() MissingPluginException');
+      return const SettingsActionResult(status: SettingsActionStatus.failure, message: 'Settings not available on this platform');
+    }
+  }
+
+  @override
+  Future<SettingsActionResult> openHotspotSettings() async {
+    print('DIAG: Platform.openHotspotSettings() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('openHotspotSettings');
+      print('DIAG: Platform.openHotspotSettings() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.openHotspotSettings() result not Map');
+        return const SettingsActionResult(status: SettingsActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = SettingsActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.openHotspotSettings() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.openHotspotSettings() PlatformException: $e');
+      return SettingsActionResult(status: SettingsActionStatus.failure, message: e.message ?? 'Failed to open hotspot settings');
+    } on MissingPluginException {
+      print('DIAG: Platform.openHotspotSettings() MissingPluginException');
+      return const SettingsActionResult(status: SettingsActionStatus.failure, message: 'Settings not available on this platform');
     }
   }
 }

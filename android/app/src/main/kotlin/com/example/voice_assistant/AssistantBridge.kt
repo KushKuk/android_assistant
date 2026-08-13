@@ -11,6 +11,7 @@ import android.util.Log
 import com.example.voice_assistant.bluetooth.BluetoothManager
 import com.example.voice_assistant.calls.CallRequest
 import com.example.voice_assistant.calls.SafeCallPipeline
+import com.example.voice_assistant.connectivity.ConnectivityManager
 import com.example.voice_assistant.contacts.ContactResolver
 import com.example.voice_assistant.speech.AssistantSpeechRecognizer
 import com.example.voice_assistant.speech.AssistantTextToSpeech
@@ -32,6 +33,7 @@ class AssistantBridge(
     private val tts = AssistantTextToSpeech(activity.applicationContext) { eventSink }
     private val stt = AssistantSpeechRecognizer(activity.applicationContext) { eventSink }
     private val bluetoothManager = BluetoothManager(activity, activity)
+    private val connectivityManager = ConnectivityManager(activity, activity)
     private var eventSink: EventChannel.EventSink? = null
     private var pendingContactsPermissionResult: MethodChannel.Result? = null
     private var pendingCallPermissionResult: MethodChannel.Result? = null
@@ -109,6 +111,29 @@ class AssistantBridge(
                 }
                 result.success(disconnectBluetoothDevice(deviceAddress).toMap())
             }
+
+            // Connectivity methods
+            "getWifiStatus" -> result.success(getWifiStatus().toMap())
+            "setWifiEnabled" -> {
+                val arguments = call.arguments as? Map<*, *>
+                val enabled = arguments?.get("enabled") as? Boolean ?: false
+                result.success(setWifiEnabled(enabled).toMap())
+            }
+            "getMobileDataStatus" -> result.success(getMobileDataStatus().toMap())
+            "setMobileDataEnabled" -> {
+                val arguments = call.arguments as? Map<*, *>
+                val enabled = arguments?.get("enabled") as? Boolean ?: false
+                result.success(setMobileDataEnabled(enabled).toMap())
+            }
+            "getHotspotStatus" -> result.success(getHotspotStatus().toMap())
+            "setHotspotEnabled" -> {
+                val arguments = call.arguments as? Map<*, *>
+                val enabled = arguments?.get("enabled") as? Boolean ?: false
+                result.success(setHotspotEnabled(enabled).toMap())
+            }
+            "openWifiSettings" -> result.success(openWifiSettings().toMap())
+            "openMobileDataSettings" -> result.success(openMobileDataSettings().toMap())
+            "openHotspotSettings" -> result.success(openHotspotSettings().toMap())
             else -> result.notImplemented()
         }
     }
@@ -345,6 +370,79 @@ class AssistantBridge(
         return result
     }
 
+    // Connectivity methods
+    @SuppressLint("MissingPermission")
+    private fun getWifiStatus(): Map<String, Any> {
+        Log.d("AssistantBridge", "getWifiStatus() entered")
+        val result = connectivityManager.getWifiStatus().toMap()
+        Log.d("AssistantBridge", "getWifiStatus() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setWifiEnabled(enabled: Boolean): Map<String, Any> {
+        Log.d("AssistantBridge", "setWifiEnabled() entered with enabled: $enabled")
+        val result = connectivityManager.setWifiEnabled(enabled).toMap()
+        Log.d("AssistantBridge", "setWifiEnabled() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun getMobileDataStatus(): Map<String, Any> {
+        Log.d("AssistantBridge", "getMobileDataStatus() entered")
+        val result = connectivityManager.getMobileDataStatus().toMap()
+        Log.d("AssistantBridge", "getMobileDataStatus() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setMobileDataEnabled(enabled: Boolean): Map<String, Any> {
+        Log.d("AssistantBridge", "setMobileDataEnabled() entered with enabled: $enabled")
+        val result = connectivityManager.setMobileDataEnabled(enabled).toMap()
+        Log.d("AssistantBridge", "setMobileDataEnabled() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun getHotspotStatus(): Map<String, Any> {
+        Log.d("AssistantBridge", "getHotspotStatus() entered")
+        val result = connectivityManager.getHotspotStatus().toMap()
+        Log.d("AssistantBridge", "getHotspotStatus() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setHotspotEnabled(enabled: Boolean): Map<String, Any> {
+        Log.d("AssistantBridge", "setHotspotEnabled() entered with enabled: $enabled")
+        val result = connectivityManager.setHotspotEnabled(enabled).toMap()
+        Log.d("AssistantBridge", "setHotspotEnabled() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun openWifiSettings(): Map<String, Any> {
+        Log.d("AssistantBridge", "openWifiSettings() entered")
+        val result = connectivityManager.openWifiSettings().toMap()
+        Log.d("AssistantBridge", "openWifiSettings() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun openMobileDataSettings(): Map<String, Any> {
+        Log.d("AssistantBridge", "openMobileDataSettings() entered")
+        val result = connectivityManager.openMobileDataSettings().toMap()
+        Log.d("AssistantBridge", "openMobileDataSettings() returning: $result")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun openHotspotSettings(): Map<String, Any> {
+        Log.d("AssistantBridge", "openHotspotSettings() entered")
+        val result = connectivityManager.openHotspotSettings().toMap()
+        Log.d("AssistantBridge", "openHotspotSettings() returning: $result")
+        return result
+    }
+
     private companion object {
         const val METHOD_CHANNEL = "com.example.voice_assistant/assistant"
         const val EVENT_CHANNEL = "com.example.voice_assistant/assistant_events"
@@ -361,7 +459,6 @@ class NativeAssistantSettingsStore(context: Context) {
         preferences.edit().apply {
             putString("assistant_name", values["assistantName"] as String)
             putString("wake_word", values["wakeWord"] as String)
-            putString("calling_mode", values["callingMode"] as? String)
             putString("voice", values["voice"] as? String)
             putFloat("speech_rate", (values["speechRate"] as? Number)?.toFloat() ?: 1f)
             putFloat("speech_pitch", (values["speechPitch"] as? Number)?.toFloat() ?: 1f)

@@ -78,22 +78,3 @@ enum BluetoothAction {
   connect,
   disconnect,
 }
-
-class BluetoothCommand {
-  const BluetoothCommand({
-    required this.action,
-    this.deviceQuery,
-    this.deviceAddress,
-  });
-
-  final BluetoothAction action;
-  final String? deviceQuery; // For resolving devices by name
-  final String? deviceAddress; // For direct address specification
-
-  bool get isGetStatus => action == BluetoothAction.getStatus;
-  bool get isEnable => action == BluetoothAction.enable;
-  bool get isDisable => action == BluetoothAction.disable;
-  bool get isListDevices => action == BluetoothAction.listDevices;
-  bool get isConnect => action == BluetoothAction.connect;
-  bool get isDisconnect => action == BluetoothAction.disconnect;
-}

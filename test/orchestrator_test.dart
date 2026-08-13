@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voice_assistant/capabilities/assistant_capability.dart';
 import 'package:voice_assistant/capabilities/bluetooth_capability.dart';
+import 'package:voice_assistant/capabilities/connectivity_capability.dart';
 import 'package:voice_assistant/commands/assistant_command.dart';
 import 'package:voice_assistant/commands/command_parser.dart';
 import 'package:voice_assistant/models/execution_result.dart';
@@ -17,6 +18,10 @@ import 'package:voice_assistant/models/assistant_settings.dart';
 import 'package:voice_assistant/models/bluetooth_result.dart';
 import 'package:voice_assistant/models/stt_result.dart';
 import 'package:voice_assistant/models/tts_result.dart';
+import 'package:voice_assistant/models/wifi_result.dart';
+import 'package:voice_assistant/models/mobile_data_result.dart';
+import 'package:voice_assistant/models/hotspot_result.dart';
+import 'package:voice_assistant/models/settings_result.dart';
 import 'package:voice_assistant/services/settings_repository.dart';
 
 class TestCapability implements AssistantCapability {
@@ -139,6 +144,43 @@ class MockAssistantPlatform implements AssistantPlatform {
   @override
   Future<BluetoothActionResult> disconnectBluetoothDevice(String deviceAddress) async =>
       const BluetoothActionResult(status: BluetoothActionStatus.success);
+
+  // Connectivity methods
+  @override
+  Future<WifiStatusResult> getWifiStatus() async =>
+      const WifiStatusResult(status: WifiStatus.disabled);
+
+  @override
+  Future<WifiActionResult> setWifiEnabled(bool enabled) async =>
+      const WifiActionResult(status: WifiActionStatus.success);
+
+  @override
+  Future<MobileDataStatusResult> getMobileDataStatus() async =>
+      const MobileDataStatusResult(status: MobileDataStatus.disabled);
+
+  @override
+  Future<MobileDataActionResult> setMobileDataEnabled(bool enabled) async =>
+      const MobileDataActionResult(status: MobileDataActionStatus.success);
+
+  @override
+  Future<HotspotStatusResult> getHotspotStatus() async =>
+      const HotspotStatusResult(status: HotspotStatus.disabled);
+
+  @override
+  Future<HotspotActionResult> setHotspotEnabled(bool enabled) async =>
+      const HotspotActionResult(status: HotspotActionStatus.success);
+
+  @override
+  Future<SettingsActionResult> openWifiSettings() async =>
+      const SettingsActionResult(status: SettingsActionStatus.success);
+
+  @override
+  Future<SettingsActionResult> openMobileDataSettings() async =>
+      const SettingsActionResult(status: SettingsActionStatus.success);
+
+  @override
+  Future<SettingsActionResult> openHotspotSettings() async =>
+      const SettingsActionResult(status: SettingsActionStatus.success);
 }
 
 void main() {
@@ -206,6 +248,98 @@ void main() {
       final orchestrator = AssistantOrchestrator([incapable, capable]);
 
       final command = CallCommand(contactQuery: 'Mom');
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+  });
+
+  group('ConnectivityCapability', () {
+    test('routes Wi-Fi command to connectivity capability', () async {
+      final platform = MockAssistantPlatform();
+      final connectivityCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([connectivityCapability]);
+
+      final command = ConnectivityCommand(type: ConnectivityType.wifi, action: ConnectivityAction.enable);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('routes mobile data command to connectivity capability', () async {
+      final platform = MockAssistantPlatform();
+      final connectivityCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([connectivityCapability]);
+
+      final command = ConnectivityCommand(type: ConnectivityType.mobileData, action: ConnectivityAction.disable);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('routes hotspot command to connectivity capability', () async {
+      final platform = MockAssistantPlatform();
+      final connectivityCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([connectivityCapability]);
+
+      final command = ConnectivityCommand(type: ConnectivityType.hotspot, action: ConnectivityAction.getStatus);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('returns unsupported result for unsupported connectivity command', () async {
+      final platform = MockAssistantPlatform();
+      final connectivityCapability = TestCapability(false, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([connectivityCapability]);
+
+      final command = ConnectivityCommand(type: ConnectivityType.wifi, action: ConnectivityAction.enable);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.status, equals(ExecutionStatus.unsupported));
+      expect(result.message, contains('No capability found'));
+    });
+
+    test('canHandleCommand returns true for supported connectivity commands', () async {
+      final platform = MockAssistantPlatform();
+      final connectivityCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([connectivityCapability]);
+
+      final command = ConnectivityCommand(type: ConnectivityType.wifi, action: ConnectivityAction.enable);
+      expect(orchestrator.canHandleCommand(command), isTrue);
+    });
+
+    test('canHandleCommand returns false for unsupported connectivity commands', () async {
+      final platform = MockAssistantPlatform();
+      final connectivityCapability = TestCapability(false, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([connectivityCapability]);
+
+      final command = ConnectivityCommand(type: ConnectivityType.wifi, action: ConnectivityAction.enable);
+      expect(orchestrator.canHandleCommand(command), isFalse);
+    });
+
+    test('propagates connectivity capability execution results', () async {
+      final platform = MockAssistantPlatform();
+      final connectivityCapability = TestCapability(
+          true, ExecutionResult.failure('Test failure'));
+      final orchestrator = AssistantOrchestrator([connectivityCapability]);
+
+      final command = ConnectivityCommand(type: ConnectivityType.wifi, action: ConnectivityAction.enable);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.status, equals(ExecutionStatus.failure));
+      expect(result.message, equals('Test failure'));
+    });
+
+    test('does not execute unrelated capability for connectivity command', () async {
+      final platform = MockAssistantPlatform();
+      // First capability says it can't handle the command
+      final incapable = TestCapability(false, ExecutionResult.success());
+      // Second capability says it can handle and returns success
+      final capable = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([incapable, capable]);
+
+      final command = ConnectivityCommand(type: ConnectivityType.wifi, action: ConnectivityAction.enable);
       final result = await orchestrator.executeCommand(command);
 
       expect(result.isSuccess, isTrue);

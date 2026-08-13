@@ -1,10 +1,7 @@
-enum CallingMode { safe, direct }
-
 class AssistantSettings {
   const AssistantSettings({
     required this.assistantName,
     required this.wakeWord,
-    required this.callingMode,
     required this.voice,
     required this.speechRate,
     required this.speechPitch,
@@ -18,7 +15,6 @@ class AssistantSettings {
   factory AssistantSettings.defaults() => const AssistantSettings(
     assistantName: defaultAssistantName,
     wakeWord: 'Hey JARVIS',
-    callingMode: CallingMode.safe,
     voice: 'Default',
     speechRate: 1,
     speechPitch: 1,
@@ -29,7 +25,6 @@ class AssistantSettings {
 
   final String assistantName;
   final String wakeWord;
-  final CallingMode callingMode;
   final String voice;
   final double speechRate;
   final double speechPitch;
@@ -40,7 +35,6 @@ class AssistantSettings {
   AssistantSettings copyWith({
     String? assistantName,
     String? wakeWord,
-    CallingMode? callingMode,
     String? voice,
     double? speechRate,
     double? speechPitch,
@@ -51,7 +45,6 @@ class AssistantSettings {
     return AssistantSettings(
       assistantName: assistantName ?? this.assistantName,
       wakeWord: wakeWord ?? this.wakeWord,
-      callingMode: callingMode ?? this.callingMode,
       voice: voice ?? this.voice,
       speechRate: speechRate ?? this.speechRate,
       speechPitch: speechPitch ?? this.speechPitch,

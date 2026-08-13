@@ -8,7 +8,6 @@ class SettingsRepository {
 
   static const _assistantName = 'assistant_name';
   static const _wakeWord = 'wake_word';
-  static const _callingMode = 'calling_mode';
   static const _voice = 'voice';
   static const _speechRate = 'speech_rate';
   static const _speechPitch = 'speech_pitch';
@@ -22,9 +21,6 @@ class SettingsRepository {
       assistantName:
           _preferences.getString(_assistantName) ?? defaults.assistantName,
       wakeWord: _preferences.getString(_wakeWord) ?? defaults.wakeWord,
-      callingMode: (_preferences.getString(_callingMode) ?? 'safe') == 'direct'
-          ? CallingMode.direct
-          : CallingMode.safe,
       voice: _preferences.getString(_voice) ?? defaults.voice,
       speechRate: _preferences.getDouble(_speechRate) ?? defaults.speechRate,
       speechPitch: _preferences.getDouble(_speechPitch) ?? defaults.speechPitch,
@@ -41,7 +37,6 @@ class SettingsRepository {
     await Future.wait([
       _preferences.setString(_assistantName, settings.assistantName),
       _preferences.setString(_wakeWord, settings.wakeWord),
-      _preferences.setString(_callingMode, settings.callingMode.name),
       _preferences.setString(_voice, settings.voice),
       _preferences.setDouble(_speechRate, settings.speechRate),
       _preferences.setDouble(_speechPitch, settings.speechPitch),

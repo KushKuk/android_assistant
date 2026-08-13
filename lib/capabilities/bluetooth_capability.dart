@@ -245,9 +245,23 @@ class BluetoothCapability implements AssistantCapability {
   ExecutionResult _convertBluetoothDeviceListResult(
       BluetoothDeviceListResult result) {
     print('DIAG: BluetoothCapability._convertBluetoothDeviceListResult() entered with result: $result');
-    if (result.devices.isEmpty && result.message.isNotEmpty) {
-      // Treat as success but with empty list and message
-      print('DIAG: BluetoothCapability._convertBluetoothDeviceListResult returning success with empty list');
+    if (result.devices.isEmpty) {
+      if (result.message.isNotEmpty) {
+        // Check if the message indicates an error condition
+        final lowerMessage = result.message.toLowerCase();
+        if (lowerMessage.contains('not available') ||
+            lowerMessage.contains('error') ||
+            lowerMessage.contains('failed') ||
+            lowerMessage.contains('permission')) {
+          print('DIAG: BluetoothCapability._convertBluetoothDeviceListResult returning failure: $result.message');
+          return ExecutionResult.failure(result.message);
+        }
+        // Otherwise treat as success with empty list (e.g., no devices found but no error)
+        print('DIAG: BluetoothCapability._convertBluetoothDeviceListResult returning success with empty list');
+        return ExecutionResult.success(data: result);
+      }
+      // No devices and no message - treat as success
+      print('DIAG: BluetoothCapability._convertBluetoothDeviceListResult returning success with empty list (no message)');
       return ExecutionResult.success(data: result);
     }
 

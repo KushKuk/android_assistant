@@ -11,6 +11,10 @@ import 'package:voice_assistant/models/stt_result.dart';
 import 'package:voice_assistant/models/tts_result.dart';
 import 'package:voice_assistant/models/bluetooth_device_info.dart';
 import 'package:voice_assistant/models/bluetooth_result.dart';
+import 'package:voice_assistant/models/wifi_result.dart';
+import 'package:voice_assistant/models/mobile_data_result.dart';
+import 'package:voice_assistant/models/hotspot_result.dart';
+import 'package:voice_assistant/models/settings_result.dart';
 import 'package:voice_assistant/services/assistant_controller.dart';
 import 'package:voice_assistant/services/assistant_platform.dart';
 import 'package:voice_assistant/services/settings_repository.dart';
@@ -61,6 +65,9 @@ class MockAssistantPlatform implements AssistantPlatform {
   Future<bool> hasMicrophonePermission() async => hasMicPermission;
 
   @override
+  Future<bool> requestMicrophonePermission() async => requestMicPermissionResult;
+
+  @override
   Future<bool> hasCallPermission() async => true;
 
   @override
@@ -73,16 +80,13 @@ class MockAssistantPlatform implements AssistantPlatform {
   Future<bool> requestContactsPermission() async => requestContactPermissionResult;
 
   @override
-  Future<CallExecutionResult> prepareCall({String? contactId, String? displayName, String? phoneNumber}) async {
-    return const CallExecutionResult(status: CallExecutionStatus.callFailed, message: 'Failed');
+  Future<ContactSearchResult> resolveContacts(String query) async {
+    return ContactSearchResult(query: query, candidates: []);
   }
 
   @override
-  Future<bool> requestMicrophonePermission() async => requestMicPermissionResult;
-
-  @override
-  Future<ContactSearchResult> resolveContacts(String query) async {
-    return ContactSearchResult(query: query, candidates: []);
+  Future<CallExecutionResult> prepareCall({String? contactId, String? displayName, String? phoneNumber}) async {
+    return const CallExecutionResult(status: CallExecutionStatus.callFailed, message: 'Failed');
   }
 
   @override
@@ -124,6 +128,43 @@ class MockAssistantPlatform implements AssistantPlatform {
   @override
   Future<BluetoothActionResult> disconnectBluetoothDevice(String deviceAddress) async =>
       const BluetoothActionResult(status: BluetoothActionStatus.success);
+
+  // Connectivity methods
+  @override
+  Future<WifiStatusResult> getWifiStatus() async =>
+      const WifiStatusResult(status: WifiStatus.disabled);
+
+  @override
+  Future<WifiActionResult> setWifiEnabled(bool enabled) async =>
+      const WifiActionResult(status: WifiActionStatus.success);
+
+  @override
+  Future<MobileDataStatusResult> getMobileDataStatus() async =>
+      const MobileDataStatusResult(status: MobileDataStatus.disabled);
+
+  @override
+  Future<MobileDataActionResult> setMobileDataEnabled(bool enabled) async =>
+      const MobileDataActionResult(status: MobileDataActionStatus.success);
+
+  @override
+  Future<HotspotStatusResult> getHotspotStatus() async =>
+      const HotspotStatusResult(status: HotspotStatus.disabled);
+
+  @override
+  Future<HotspotActionResult> setHotspotEnabled(bool enabled) async =>
+      const HotspotActionResult(status: HotspotActionStatus.success);
+
+  @override
+  Future<SettingsActionResult> openWifiSettings() async =>
+      const SettingsActionResult(status: SettingsActionStatus.success);
+
+  @override
+  Future<SettingsActionResult> openMobileDataSettings() async =>
+      const SettingsActionResult(status: SettingsActionStatus.success);
+
+  @override
+  Future<SettingsActionResult> openHotspotSettings() async =>
+      const SettingsActionResult(status: SettingsActionStatus.success);
 }
 
 void main() {
@@ -407,6 +448,7 @@ void main() {
     await Future.delayed(Duration.zero);
 
     platform.emitEvent({'type': 'final_transcript', 'text': 'Call Mom'});
+    // Allow microtask to execute
     await Future.delayed(Duration.zero);
 
     // The controller should have the command but not execute it

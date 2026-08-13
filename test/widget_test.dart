@@ -9,7 +9,6 @@ void main() {
 
     expect(settings.assistantName, 'JARVIS');
     expect(settings.wakeWord, 'Hey JARVIS');
-    expect(settings.callingMode, CallingMode.safe);
   });
 
   test('settings can change the assistant name independently', () {

@@ -103,30 +103,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               settings.copyWith(voiceFeedbackEnabled: value),
             ),
           ),
-          const _SectionTitle('CALLING'),
-          SegmentedButton<CallingMode>(
-            segments: const [
-              ButtonSegment(
-                value: CallingMode.safe,
-                label: Text('Safe'),
-                icon: Icon(Icons.verified_user_outlined),
-              ),
-              ButtonSegment(
-                value: CallingMode.direct,
-                label: Text('Direct'),
-                icon: Icon(Icons.phone_forwarded_outlined),
-              ),
-            ],
-            selected: {settings.callingMode},
-            onSelectionChanged: (selection) => widget.controller.updateSettings(
-              settings.copyWith(callingMode: selection.first),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Safe mode always asks for confirmation before a call.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
           const _SectionTitle('CONTACTS'),
           _SettingsTile(
             title: 'Manage contact aliases',

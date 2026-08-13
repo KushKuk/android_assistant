@@ -43,7 +43,7 @@ class BluetoothManager(private val context: Context, private val activity: Activ
 
     /**
      * Requests to enable Bluetooth.
-     * Note: On most Android versions, this requires user interaction via system UI.
+     * Attempts to enable programmatically first, falls back to user action if needed.
      */
     @SuppressLint("MissingPermission")
     fun requestBluetoothEnable(): BluetoothActionResult {
@@ -53,25 +53,52 @@ class BluetoothManager(private val context: Context, private val activity: Activ
             )
         }
 
-        // Check if we have the necessary permissions for Android 12+
-        // For simplicity, we'll attempt the operation and let the system handle permissions
+        // If already enabled, return success immediately
         if (bluetoothAdapter?.isEnabled == true) {
             return BluetoothActionResult("success", "Bluetooth is already enabled")
         }
 
-        // Request enabling Bluetooth via system intent (requires user interaction)
-        val enableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        // Try to enable Bluetooth programmatically (requires BLUETOOTH_ADMIN permission)
         try {
-            activity?.startActivityForResult(enableIntent, 0)
-            // Note: We can't know the result immediately, so we return userActionRequired
-            // The calling code should check the status again after user interaction
+            val result = bluetoothAdapter?.enable()
+            if (result == true) {
+                // Enable command issued successfully, now check if it's actually enabled
+                // Give it a moment to turn on, then check status
+                val startTime = System.currentTimeMillis()
+                while (System.currentTimeMillis() - startTime < 2000) { // 2 second timeout
+                    Thread.sleep(100) // Check every 100ms
+                    if (bluetoothAdapter?.isEnabled == true) {
+                        return BluetoothActionResult("success", "Bluetooth enabled successfully")
+                    }
+                }
+                // If we get here, enable was issued but didn't turn on within 2 seconds
+                // Fall back to user action
+                return BluetoothActionResult(
+                    "userActionRequired",
+                    "Bluetooth enable command issued but device is still enabling. Please wait or enable manually."
+                )
+            } else if (result == false) {
+                // Enable command failed immediately
+                return BluetoothActionResult(
+                    "failure", "Failed to issue Bluetooth enable command"
+                )
+            } else {
+                // result is null (shouldn't happen but let's be safe)
+                return BluetoothActionResult(
+                    "failure", "Bluetooth enable attempt returned null result"
+                )
+            }
+        } catch (e: SecurityException) {
+            // Don't have BLUETOOTH_ADMIN permission, fall back to user action
             return BluetoothActionResult(
                 "userActionRequired",
-                "Please enable Bluetooth in the system dialog"
+                "Please enable Bluetooth in system settings (requires BLUETOOTH_ADMIN permission)"
             )
         } catch (e: Exception) {
+            // Other exception, fall back to user action
             return BluetoothActionResult(
-                "failure", "Failed to request Bluetooth enable: ${e.message}"
+                "userActionRequired",
+                "Failed to enable Bluetooth: ${e.message}. Please enable manually."
             )
         }
     }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:voice_assistant/capabilities/bluetooth_capability.dart';
 import 'package:voice_assistant/capabilities/call_capability.dart';
+import 'package:voice_assistant/capabilities/connectivity_capability.dart';
 import 'package:voice_assistant/commands/assistant_command.dart';
 import 'package:voice_assistant/commands/command_parser.dart';
 import 'package:voice_assistant/commands/command_parse_result.dart';
@@ -24,6 +25,7 @@ class AssistantController extends ChangeNotifier {
       : _orchestrator = AssistantOrchestrator([
           CallCapability(_platform),
           BluetoothCapability(_platform),
+          ConnectivityCapability(_platform),
         ]);
 
   final SettingsRepository _repository;
@@ -73,7 +75,7 @@ class AssistantController extends ChangeNotifier {
     } on MissingPluginException {
       // Flutter settings remain available during non-Android development.
     }
-    notifyListeners();
+    if (kDebugMode) notifyListeners();
   }
 
   Future<void> updateSettings(AssistantSettings settings) async {
@@ -149,10 +151,6 @@ class AssistantController extends ChangeNotifier {
           if (_lastCommandParseResult?.isParsed == true) {
             print('DIAG: AssistantController command parsed and stored');
             _setState(AssistantState.processing);
-            // Initiate command execution for parsed commands
-            print('DIAG: About to call initiateCommandExecution');
-            initiateCommandExecution();
-            print('DIAG: Called initiateCommandExecution');
           } else {
             print('DIAG: AssistantController - command not parsed, setting state to processing');
             _setState(AssistantState.processing);
@@ -394,8 +392,7 @@ class AssistantController extends ChangeNotifier {
           print('DIAG: AssistantController call permission denied');
           _setState(AssistantState.error);
           _errorMessage = 'Call permission is required.';
-          // Clear the parsed result to prevent re-handling
-          _lastCommandParseResult = null;
+          _lastCommandParseResult = null; // Clear the command
           print('DIAG: lastCommandParseResult after clearing for denied call permission: $_lastCommandParseResult');
           return;
         }
@@ -430,13 +427,17 @@ class AssistantController extends ChangeNotifier {
       print('DIAG: AssistantController handling CallCommand with direct calling behavior');
       try {
         // Resolve the contact
+        print('DIAG: About to resolve contacts for query: ${command.contactQuery}');
         final resolveResult = await _platform.resolveContacts(command.contactQuery);
+        print('DIAG: Contact resolution complete. Candidates count: ${resolveResult.candidates.length}, hasNoMatches: ${resolveResult.hasNoMatches}');
 
         if (resolveResult.hasNoMatches) {
           // No contacts found
+          print('DIAG: No contacts found, setting state to error');
           _setState(AssistantState.error);
           _errorMessage = 'Contact not found: "${resolveResult.query}"';
           _lastCommandParseResult = null; // Clear the command
+          print('DIAG: State set to error, command cleared');
           return;
         }
 
@@ -449,7 +450,6 @@ class AssistantController extends ChangeNotifier {
           // No exact matches found
           _setState(AssistantState.error);
           _errorMessage = 'Contact not found: "${resolveResult.query}"';
-          _lastCommandParseResult = null; // Clear the command
           return;
         }
 
@@ -457,7 +457,6 @@ class AssistantController extends ChangeNotifier {
           // Multiple exact matches found - error (no fallback to selection)
           _setState(AssistantState.error);
           _errorMessage = 'Multiple exact matches found for "${resolveResult.query}". Please be more specific.';
-          _lastCommandParseResult = null; // Clear the command
           return;
         }
 
@@ -466,7 +465,7 @@ class AssistantController extends ChangeNotifier {
         if (candidate.phoneNumbers.isEmpty) {
           _setState(AssistantState.error);
           _errorMessage = 'Contact "${candidate.displayName}" has no phone numbers';
-          _lastCommandParseResult = null;
+          // Command result is cleared in startListening() when a new session begins
           return;
         }
 
@@ -474,7 +473,7 @@ class AssistantController extends ChangeNotifier {
           // Multiple phone numbers for the exact match - error (no fallback to selection)
           _setState(AssistantState.error);
           _errorMessage = 'Contact "${candidate.displayName}" has multiple phone numbers. Please specify which number to call.';
-          _lastCommandParseResult = null; // Clear the command
+          // Command result is cleared in startListening() when a new session begins
           return;
         }
 
@@ -497,23 +496,25 @@ class AssistantController extends ChangeNotifier {
 
           // Handle the confirm result
           _handleExecutionResult(_convertCallExecutionResult(confirmResult));
+          _lastCommandParseResult = null; // Clear the command
           return;
         } else {
           // Handle other prepare results (permission required, etc.)
           _handleExecutionResult(_convertCallExecutionResult(prepareResult));
+          _lastCommandParseResult = null; // Clear the command
           return;
         }
       } on PlatformException catch (e) {
         print('DIAG: AssistantController direct call PlatformException: $e');
         _setState(AssistantState.error);
         _errorMessage = 'Direct call failed: ${e.message}';
-        // Preserve command for potential retry (similar to normal flow)
+        _lastCommandParseResult = null; // Clear the command
         return;
       } catch (e) {
         print('DIAG: AssistantController direct call exception: $e');
         _setState(AssistantState.error);
         _errorMessage = 'Direct call failed: $e';
-        // Preserve command for potential retry (similar to normal flow)
+        _lastCommandParseResult = null; // Clear the command
         return;
       }
     }
@@ -537,8 +538,12 @@ class AssistantController extends ChangeNotifier {
 
     // Handle the result to update state appropriately
     _handleExecutionResult(result);
+    // Clear the command result after handling, unless it's a permission required error
+    // (we keep permission required errors so the user can retry after granting permission)
+    if (result.status != ExecutionStatus.permissionRequired) {
+      _lastCommandParseResult = null;
+    }
     print('DIAG: lastCommandParseResult after _handleExecutionResult: $_lastCommandParseResult');
-    // Note: Command result is cleared in startListening() when a new session begins
   }
 
   /// Deprecated: Use orchestrator.executeCommand() instead.

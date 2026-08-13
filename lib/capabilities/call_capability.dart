@@ -103,14 +103,6 @@ class CallCapability implements AssistantCapability {
       }
       print('DIAG: CallCapability._executeCallCommand handling other PlatformException: $e');
       return ExecutionResult.failure('Call execution failed: $e');
-    } on PlatformException catch (e) {
-      print('DIAG: CallCapability._executeCallCommand caught PlatformException: $e');
-      if (e.code == 'contacts_permission_required') {
-        print('DIAG: CallCapability._executeCallCommand handling contacts permission required');
-        return ExecutionResult.permissionRequired(e.message ?? 'Contacts permission is required.');
-      }
-      print('DIAG: CallCapability._executeCallCommand handling other PlatformException: $e');
-      return ExecutionResult.failure('Call execution failed: $e');
     } catch (e) {
       print('DIAG: CallCapability._executeCallCommand caught exception: $e');
       return ExecutionResult.failure('Call execution failed: $e');
