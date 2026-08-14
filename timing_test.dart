@@ -1,4 +1,5 @@
 import 'dart:async';
+// ignore_for_file: avoid_print
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voice_assistant/services/assistant_controller.dart';
 import 'package:voice_assistant/services/settings_repository.dart';
@@ -14,6 +15,8 @@ import 'package:voice_assistant/models/wifi_result.dart';
 import 'package:voice_assistant/models/mobile_data_result.dart';
 import 'package:voice_assistant/models/hotspot_result.dart';
 import 'package:voice_assistant/models/settings_result.dart';
+import 'package:voice_assistant/models/flashlight_result.dart';
+import 'package:voice_assistant/models/screenshot_result.dart';
 
 class MockSettingsRepository implements SettingsRepository {
   @override
@@ -161,6 +164,20 @@ class MockAssistantPlatform implements AssistantPlatform {
 
   @override
   Future<SttState> getSpeechRecognitionStatus() async => SttState.idle;
+
+  // Flashlight methods
+  @override
+  Future<FlashlightAvailabilityResult> getFlashlightAvailability() async =>
+      const FlashlightAvailabilityResult(status: FlashlightStatus.available);
+
+  @override
+  Future<FlashlightActionResult> setFlashlightEnabled(bool enabled) async =>
+      const FlashlightActionResult(status: FlashlightActionStatus.success);
+
+  // Screenshot methods
+  @override
+  Future<ScreenshotActionResult> takeScreenshot() async =>
+      const ScreenshotActionResult(status: ScreenshotActionStatus.success);
 }
 
 void main() {

@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:voice_assistant/capabilities/bluetooth_capability.dart';
 import 'package:voice_assistant/capabilities/call_capability.dart';
 import 'package:voice_assistant/capabilities/connectivity_capability.dart';
+import 'package:voice_assistant/capabilities/flashlight_capability.dart';
+import 'package:voice_assistant/capabilities/screenshot_capability.dart';
 import 'package:voice_assistant/commands/assistant_command.dart';
 import 'package:voice_assistant/commands/command_parser.dart';
 import 'package:voice_assistant/commands/command_parse_result.dart';
@@ -19,30 +21,61 @@ import 'package:voice_assistant/models/bluetooth_result.dart';
 import 'package:voice_assistant/services/assistant_orchestrator.dart';
 import 'package:voice_assistant/services/assistant_platform.dart';
 import 'package:voice_assistant/services/settings_repository.dart';
+import 'package:voice_assistant/services/wake_word_service.dart';
 
 class AssistantController extends ChangeNotifier {
-  AssistantController(this._repository, this._settings, this._platform)
-      : _orchestrator = AssistantOrchestrator([
-          CallCapability(_platform),
-          BluetoothCapability(_platform),
-          ConnectivityCapability(_platform),
-        ]);
+  AssistantController(
+    SettingsRepository repository,
+    AssistantSettings settings,
+    AssistantPlatform platform, {
+    WakeWordService? wakeWordService,
+  })
+   : _repository = repository,
+     _settings = settings,
+     _platform = platform,
+     _orchestrator = _createOrchestrator(platform),
+     _wakeWordService = wakeWordService ?? WakeWordService(),
+     _wakeWordListening = false,
+     _commandParser = CommandParser(),
+     _lastCommandParseResult = null,
+     _partialTranscript = null,
+     _finalTranscript = null,
+     _errorMessage = null,
+     _integrationStatus = const AssistantIntegrationStatus.unavailable(),
+     _eventSubscription = null,
+     _state = AssistantState.idle {
+    // Start wake-word listening for the initial idle state.
+    _startWakeWordListening();
+  }
+
+  static AssistantOrchestrator _createOrchestrator(AssistantPlatform platform) {
+    return AssistantOrchestrator([
+        CallCapability(platform),
+        BluetoothCapability(platform),
+        ConnectivityCapability(platform),
+        FlashlightCapability(platform),
+        ScreenshotCapability(platform),
+    ]);
+  }
 
   final SettingsRepository _repository;
   final AssistantPlatform _platform;
   final AssistantOrchestrator _orchestrator;
   AssistantSettings _settings;
-  AssistantState _state = AssistantState.idle;
-  AssistantIntegrationStatus _integrationStatus =
-      const AssistantIntegrationStatus.unavailable();
+  AssistantState _state;
+  AssistantIntegrationStatus _integrationStatus;
   StreamSubscription<Map<Object?, Object?>>? _eventSubscription;
 
   String? _partialTranscript;
   String? _finalTranscript;
   String? _errorMessage;
 
-  final CommandParser _commandParser = CommandParser();
+  final CommandParser _commandParser;
   CommandParseResult? _lastCommandParseResult;
+
+  // Wake word detection
+  final WakeWordService _wakeWordService;
+  bool _wakeWordListening;
 
   AssistantSettings get settings => _settings;
   AssistantState get state => _state;
@@ -69,13 +102,59 @@ class AssistantController extends ChangeNotifier {
     _integrationStatus = await _platform.getIntegrationStatus();
     try {
       await _platform.syncSettings(_settings);
-      _eventSubscription = _platform.events.listen(_handleNativeEvent);
+      _eventSubscription = _platform.events.listen((event) async {
+        await _handleNativeEvent(event);
+      });
     } on PlatformException {
       // Flutter settings remain available during non-Android development.
     } on MissingPluginException {
       // Flutter settings remain available during non-Android development.
     }
     if (kDebugMode) notifyListeners();
+  }
+
+  Future<void> _initializeWakeWordService() async {
+    // Initialize the wake-word service (mock implementation).
+    await _wakeWordService.initialize();
+  }
+
+  Future<void> _startWakeWordListening() async {
+    if (_wakeWordListening) return;
+    final hasPermission = await _platform.hasMicrophonePermission();
+    if (!hasPermission) {
+      final granted = await _platform.requestMicrophonePermission();
+      if (!granted) {
+        if (kDebugMode) print('Microphone permission denied for wake word detection.');
+        return;
+      }
+    }
+    await _wakeWordService.startListening(_onWakeWordDetected);
+    _wakeWordListening = true;
+    if (kDebugMode) print('Wake word listening started.');
+  }
+
+  Future<void> _stopWakeWordListening() async {
+    if (!_wakeWordListening) return;
+    _wakeWordService.stop();
+    _wakeWordListening = false;
+    if (kDebugMode) print('Wake word listening stopped.');
+  }
+
+  void _onWakeWordDetected() {
+    if (kDebugMode) print('Wake word detected!');
+    _stopWakeWordListening();
+    _setState(AssistantState.wakeWordDetected);
+    // After detecting wake word, start normal listening for commands.
+    startListening().then((_) {
+      // The startListening method will set state to listening when the STT starts.
+      // We don't need to do anything else here.
+    }).catchError((error) {
+      if (kDebugMode) print('Failed to start listening after wake word detection: $error');
+      _setState(AssistantState.error);
+      _errorMessage = 'Failed to start listening: $error';
+      // Optionally, restart wake-word listening after an error?
+      _startWakeWordListening();
+    });
   }
 
   Future<void> updateSettings(AssistantSettings settings) async {
@@ -92,12 +171,18 @@ class AssistantController extends ChangeNotifier {
   }
 
   Future<void> startListening() async {
+    // Stop wake-word listening to avoid conflict with STT
+    await _stopWakeWordListening();
+
     final hasPermission = await _platform.hasMicrophonePermission();
     if (!hasPermission) {
       final granted = await _platform.requestMicrophonePermission();
       if (!granted) {
         _setState(AssistantState.error);
         _errorMessage = 'Microphone permission denied.';
+        // Restart wake-word listening if we were previously listening?
+        // Since we are in error state, we might want to try again later.
+        // For now, we do not automatically restart.
         return;
       }
     }
@@ -110,7 +195,35 @@ class AssistantController extends ChangeNotifier {
   }
 
   Future<void> stopListening() async {
+    // If we are currently listening, transition to processing state to handle what was said
+    if (_state == AssistantState.listening) {
+      _setState(AssistantState.processing);
+    }
     await _platform.stopListening();
+    // Note: Wake-word listening will be restarted based on state transitions
+    // when the 'listening_stopped' event sets state to idle.
+
+    // If we were listening and have a partial transcript but no final transcript yet,
+    // treat the partial transcript as if it were final and execute it
+    if (_state == AssistantState.processing &&
+        _partialTranscript != null &&
+        _partialTranscript!.isNotEmpty &&
+        _lastCommandParseResult == null) {
+      // Treat partial transcript as final transcript
+      final transcript = _partialTranscript!;
+      _partialTranscript = null;
+      _lastCommandParseResult = _commandParser.parse(transcript);
+      if (_lastCommandParseResult?.isParsed == true) {
+        initiateCommandExecution();
+      } else {
+        // If parsing failed, just go to processing state (already there)
+      }
+    }
+
+    // If we have a pending command, execute it now
+    if (hasPendingCommand) {
+      initiateCommandExecution();
+    }
   }
 
   Future<void> cancelListening() async {
@@ -122,9 +235,13 @@ class AssistantController extends ChangeNotifier {
     await _platform.speak(text);
   }
 
-  void _handleNativeEvent(Map<Object?, Object?> event) {
+  Future<void> _handleNativeEvent(Map<Object?, Object?> event) async {
     final type = event['type'] as String?;
     if (type == null) return;
+
+    if (kDebugMode) {
+      print('DIAG: _handleNativeEvent received event: type=$type, currentState=$_state');
+    }
 
     switch (type) {
       case 'bridge_ready':
@@ -150,6 +267,8 @@ class AssistantController extends ChangeNotifier {
           print('DIAG: AssistantController lastCommandParseResult after setting: $_lastCommandParseResult');
           if (_lastCommandParseResult?.isParsed == true) {
             print('DIAG: AssistantController command parsed and stored');
+            // Set state to processing but do not execute command yet
+            // Execution will be triggered explicitly (e.g., by stopListening)
             _setState(AssistantState.processing);
           } else {
             print('DIAG: AssistantController - command not parsed, setting state to processing');
@@ -161,22 +280,12 @@ class AssistantController extends ChangeNotifier {
         }
         break;
       case 'listening_stopped':
-        // When listening stops, we transition to processing to handle the final results
-        // If we were actively listening, move to processing state
+        // If we're still in listening state (meaning we didn't get a final transcript to process),
+        // transition to idle state
         if (_state == AssistantState.listening) {
-          _setState(AssistantState.processing);
-        }
-        // If we're already processing (e.g., from a prior stopListening call) and have
-        // a final transcript to process, remain in processing state
-        else if (_state == AssistantState.processing && _finalTranscript != null) {
-          // Stay in processing state to handle the final transcript
-        }
-        // For any other state (idle, unavailable, permission required, etc.) that's not an error,
-        // return to idle state
-        else if (_state != AssistantState.error) {
           _setState(AssistantState.idle);
         }
-        // If we're in error state, remain in error state (no state change)
+        // For any other state, we leave it as is (it was set by command execution or other events)
         break;
 
       // TTS Events
@@ -202,6 +311,19 @@ class AssistantController extends ChangeNotifier {
     if (_state == newState) return;
     _state = newState;
     notifyListeners();
+
+    // Handle wake-word listening based on state
+    if (newState == AssistantState.idle) {
+      // When entering idle state, start wake-word listening if not already listening
+      if (!_wakeWordListening) {
+        _startWakeWordListening();
+      }
+    } else {
+      // When leaving idle state, stop wake-word listening if we were listening
+      if (_wakeWordListening) {
+        _stopWakeWordListening();
+      }
+    }
   }
 
   /// Call this method to confirm or decline an incoming call request.
@@ -343,6 +465,11 @@ class AssistantController extends ChangeNotifier {
 
   Future<void> initiateCommandExecution() async {
     print('DIAG: initiateCommandExecution() started');
+    // Print stack trace to see what called us
+    if (kDebugMode) {
+      print('DIAG: initiateCommandExecution called from:');
+      StackTrace.current.toString().split('\n').take(5).forEach((line) => print('DIAG: $line'));
+    }
     if (!hasPendingCommand) {
       print('DIAG: AssistantController has no pending command');
       _setState(AssistantState.processing);
@@ -436,8 +563,10 @@ class AssistantController extends ChangeNotifier {
           print('DIAG: No contacts found, setting state to error');
           _setState(AssistantState.error);
           _errorMessage = 'Contact not found: "${resolveResult.query}"';
-          _lastCommandParseResult = null; // Clear the command
-          print('DIAG: State set to error, command cleared');
+          print('DIAG: State set to error');
+          // Clear the parsed result to prevent re-handling
+          _lastCommandParseResult = null;
+          print('DIAG: Returning from initiateCommandExecution after no contacts found');
           return;
         }
 
@@ -450,6 +579,8 @@ class AssistantController extends ChangeNotifier {
           // No exact matches found
           _setState(AssistantState.error);
           _errorMessage = 'Contact not found: "${resolveResult.query}"';
+          // Clear the parsed result to prevent re-handling
+          _lastCommandParseResult = null;
           return;
         }
 
@@ -457,6 +588,8 @@ class AssistantController extends ChangeNotifier {
           // Multiple exact matches found - error (no fallback to selection)
           _setState(AssistantState.error);
           _errorMessage = 'Multiple exact matches found for "${resolveResult.query}". Please be more specific.';
+          // Clear the parsed result to prevent re-handling
+          _lastCommandParseResult = null;
           return;
         }
 
@@ -465,6 +598,8 @@ class AssistantController extends ChangeNotifier {
         if (candidate.phoneNumbers.isEmpty) {
           _setState(AssistantState.error);
           _errorMessage = 'Contact "${candidate.displayName}" has no phone numbers';
+          // Clear the parsed result to prevent re-handling
+          _lastCommandParseResult = null;
           // Command result is cleared in startListening() when a new session begins
           return;
         }
@@ -473,6 +608,8 @@ class AssistantController extends ChangeNotifier {
           // Multiple phone numbers for the exact match - error (no fallback to selection)
           _setState(AssistantState.error);
           _errorMessage = 'Contact "${candidate.displayName}" has multiple phone numbers. Please specify which number to call.';
+          // Clear the parsed result to prevent re-handling
+          _lastCommandParseResult = null;
           // Command result is cleared in startListening() when a new session begins
           return;
         }
@@ -496,28 +633,26 @@ class AssistantController extends ChangeNotifier {
 
           // Handle the confirm result
           _handleExecutionResult(_convertCallExecutionResult(confirmResult));
-          _lastCommandParseResult = null; // Clear the command
           return;
         } else {
           // Handle other prepare results (permission required, etc.)
           _handleExecutionResult(_convertCallExecutionResult(prepareResult));
-          _lastCommandParseResult = null; // Clear the command
           return;
         }
       } on PlatformException catch (e) {
         print('DIAG: AssistantController direct call PlatformException: $e');
         _setState(AssistantState.error);
         _errorMessage = 'Direct call failed: ${e.message}';
-        _lastCommandParseResult = null; // Clear the command
         return;
       } catch (e) {
         print('DIAG: AssistantController direct call exception: $e');
         _setState(AssistantState.error);
         _errorMessage = 'Direct call failed: $e';
-        _lastCommandParseResult = null; // Clear the command
         return;
       }
     }
+    // If we handled a CallCommand with direct calling, we've already returned
+    // so we won't reach the orchestrator execution below
 
     print('DIAG: About to execute via orchestrator');
     print('DIAG: lastCommandParseResult before orchestrator: $_lastCommandParseResult');
@@ -540,6 +675,7 @@ class AssistantController extends ChangeNotifier {
     _handleExecutionResult(result);
     // Clear the command result after handling, unless it's a permission required error
     // (we keep permission required errors so the user can retry after granting permission)
+    // Note: Command result is cleared in startListening() for new sessions
     if (result.status != ExecutionStatus.permissionRequired) {
       _lastCommandParseResult = null;
     }
@@ -665,6 +801,8 @@ class AssistantController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _wakeWordService.stop();
+    _wakeWordListening = false;
     _eventSubscription?.cancel();
     super.dispose();
   }

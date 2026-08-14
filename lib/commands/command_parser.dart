@@ -42,6 +42,20 @@ class CommandParser {
       return CommandParseResult.parsed(connectivityCommand);
     }
 
+    // Try flashlight command
+    final flashlightCommand = _flashlightTarget(normalizedInput);
+    if (flashlightCommand != null) {
+      print('DIAG: CommandParser.parse() exiting: parsed FlashlightCommand with action: ${flashlightCommand.action}');
+      return CommandParseResult.parsed(flashlightCommand);
+    }
+
+    // Try screenshot command
+    final screenshotCommand = _screenshotTarget(normalizedInput);
+    if (screenshotCommand != null) {
+      print('DIAG: CommandParser.parse() exiting: parsed ScreenshotCommand');
+      return CommandParseResult.parsed(screenshotCommand);
+    }
+
     print('DIAG: CommandParser.parse() exiting: command not supported');
     return const CommandParseResult.unsupported('Command is not supported.');
   }
@@ -145,6 +159,48 @@ class CommandParser {
     }
 
     print('DIAG: CommandParser._connectivityTarget() exiting: no match');
+    return null;
+  }
+
+  FlashlightCommand? _flashlightTarget(String input) {
+    print('DIAG: CommandParser._flashlightTarget() entered with input: $input');
+    final lower = input.toLowerCase();
+
+    // Turn on flashlight
+    if (RegExp(r'^\s*turn\s+on\s+flashlight\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*enable\s+flashlight\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*flashlight\s+on\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*switch\s+on\s+flashlight\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._flashlightTarget() exiting with match: flashlight on');
+      return FlashlightCommand(action: FlashlightAction.on);
+    }
+
+    // Turn off flashlight
+    if (RegExp(r'^\s*turn\s+off\s+flashlight\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*disable\s+flashlight\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*flashlight\s+off\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*switch\s+off\s+flashlight\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._flashlightTarget() exiting with match: flashlight off');
+      return FlashlightCommand(action: FlashlightAction.off);
+    }
+
+    print('DIAG: CommandParser._flashlightTarget() exiting: no match');
+    return null;
+  }
+
+  ScreenshotCommand? _screenshotTarget(String input) {
+    print('DIAG: CommandParser._screenshotTarget() entered with input: $input');
+    final lower = input.toLowerCase();
+
+    // Screenshot commands
+    if (RegExp(r'^\s*take\s+a\s+screenshot\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*screenshot\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*capture\s+my\s+screen\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._screenshotTarget() exiting with match: screenshot');
+      return ScreenshotCommand();
+    }
+
+    print('DIAG: CommandParser._screenshotTarget() exiting: no match');
     return null;
   }
 

@@ -48,3 +48,20 @@ class ConnectivityCommand extends AssistantCommand {
 enum ConnectivityType { wifi, mobileData, hotspot }
 
 enum ConnectivityAction { getStatus, enable, disable, openSettings }
+
+// ADD FLASHLIGHT COMMAND
+class FlashlightCommand extends AssistantCommand {
+  const FlashlightCommand({required this.action});
+
+  final FlashlightAction action;
+
+  bool get isOn => action == FlashlightAction.on;
+  bool get isOff => action == FlashlightAction.off;
+}
+
+enum FlashlightAction { on, off }
+
+// ADD SCREENSHOT COMMAND
+class ScreenshotCommand extends AssistantCommand {
+  const ScreenshotCommand();
+}

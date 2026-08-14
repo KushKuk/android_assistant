@@ -15,6 +15,8 @@ import 'package:voice_assistant/models/wifi_result.dart';
 import 'package:voice_assistant/models/mobile_data_result.dart';
 import 'package:voice_assistant/models/hotspot_result.dart';
 import 'package:voice_assistant/models/settings_result.dart';
+import 'package:voice_assistant/models/flashlight_result.dart';
+import 'package:voice_assistant/models/screenshot_result.dart';
 import 'package:voice_assistant/services/assistant_controller.dart';
 import 'package:voice_assistant/services/assistant_platform.dart';
 import 'package:voice_assistant/services/settings_repository.dart';
@@ -165,6 +167,30 @@ class MockAssistantPlatform implements AssistantPlatform {
   @override
   Future<SettingsActionResult> openHotspotSettings() async =>
       const SettingsActionResult(status: SettingsActionStatus.success);
+
+  // Flashlight methods
+  @override
+  Future<FlashlightAvailabilityResult> getFlashlightAvailability() async =>
+      const FlashlightAvailabilityResult(status: FlashlightStatus.available);
+
+  @override
+  Future<FlashlightActionResult> setFlashlightEnabled(bool enabled) async =>
+      const FlashlightActionResult(status: FlashlightActionStatus.success);
+
+  // Screenshot methods
+  @override
+  Future<ScreenshotActionResult> takeScreenshot() async =>
+      const ScreenshotActionResult(status: ScreenshotActionStatus.success);
+
+  @override
+  Future<void> startWakeWordDetection() async {
+    // Mock implementation for testing
+  }
+
+  @override
+  Future<void> stopWakeWordDetection() async {
+    // Mock implementation for testing
+  }
 }
 
 void main() {

@@ -8,6 +8,13 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.provider.Settings
+import com.example.voice_assistant.connectivity.HotspotActionResult
+import com.example.voice_assistant.connectivity.HotspotStatusResult
+import com.example.voice_assistant.connectivity.MobileDataActionResult
+import com.example.voice_assistant.connectivity.MobileDataStatusResult
+import com.example.voice_assistant.connectivity.SettingsActionResult
+import com.example.voice_assistant.connectivity.WifiActionResult
+import com.example.voice_assistant.connectivity.WifiStatusResult
 
 /**
  * Manages system connectivity operations for the voice assistant.
@@ -279,7 +286,7 @@ class ConnectivityManager(private val context: Context, private val activity: Ac
      * Opens hotspot settings.
      */
     fun openHotspotSettings(): SettingsActionResult {
-        val intent = Intent(Settings.ACTION_TETHERING_SETTINGS)
+        val intent = Intent("android.settings.TETHERING_SETTINGS")
         return startSettingsActivity(intent, "Hotspot settings")
     }
 

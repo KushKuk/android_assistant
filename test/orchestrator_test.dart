@@ -3,11 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:voice_assistant/capabilities/assistant_capability.dart';
 import 'package:voice_assistant/capabilities/bluetooth_capability.dart';
 import 'package:voice_assistant/capabilities/connectivity_capability.dart';
+import 'package:voice_assistant/capabilities/flashlight_capability.dart';
+import 'package:voice_assistant/capabilities/screenshot_capability.dart';
 import 'package:voice_assistant/commands/assistant_command.dart';
 import 'package:voice_assistant/commands/command_parser.dart';
 import 'package:voice_assistant/models/execution_result.dart';
 import 'package:voice_assistant/models/bluetooth_device_info.dart';
 import 'package:voice_assistant/models/bluetooth_result.dart';
+import 'package:voice_assistant/models/flashlight_result.dart';
+import 'package:voice_assistant/models/screenshot_result.dart';
 import 'package:voice_assistant/services/assistant_orchestrator.dart';
 import 'package:voice_assistant/services/assistant_platform.dart';
 import 'package:voice_assistant/models/contact_candidate.dart';
@@ -181,6 +185,30 @@ class MockAssistantPlatform implements AssistantPlatform {
   @override
   Future<SettingsActionResult> openHotspotSettings() async =>
       const SettingsActionResult(status: SettingsActionStatus.success);
+
+  // Flashlight methods
+  @override
+  Future<FlashlightAvailabilityResult> getFlashlightAvailability() async =>
+      const FlashlightAvailabilityResult(status: FlashlightStatus.available);
+
+  @override
+  Future<FlashlightActionResult> setFlashlightEnabled(bool enabled) async =>
+      const FlashlightActionResult(status: FlashlightActionStatus.success);
+
+  // Screenshot methods
+  @override
+  Future<ScreenshotActionResult> takeScreenshot() async =>
+      const ScreenshotActionResult(status: ScreenshotActionStatus.success);
+
+  @override
+  Future<void> startWakeWordDetection() async {
+    // Mock implementation for testing
+  }
+
+  @override
+  Future<void> stopWakeWordDetection() async {
+    // Mock implementation for testing
+  }
 }
 
 void main() {
@@ -340,6 +368,157 @@ void main() {
       final orchestrator = AssistantOrchestrator([incapable, capable]);
 
       final command = ConnectivityCommand(type: ConnectivityType.wifi, action: ConnectivityAction.enable);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+  });
+
+  group('FlashlightCapability', () {
+    test('routes flashlight on command to flashlight capability', () async {
+      final platform = MockAssistantPlatform();
+      final flashlightCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([flashlightCapability]);
+
+      final command = FlashlightCommand(action: FlashlightAction.on);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('routes flashlight off command to flashlight capability', () async {
+      final platform = MockAssistantPlatform();
+      final flashlightCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([flashlightCapability]);
+
+      final command = FlashlightCommand(action: FlashlightAction.off);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('returns unsupported result for unsupported flashlight command', () async {
+      final platform = MockAssistantPlatform();
+      final flashlightCapability = TestCapability(false, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([flashlightCapability]);
+
+      final command = FlashlightCommand(action: FlashlightAction.on);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.status, equals(ExecutionStatus.unsupported));
+      expect(result.message, contains('No capability found'));
+    });
+
+    test('canHandleCommand returns true for supported flashlight commands', () async {
+      final platform = MockAssistantPlatform();
+      final flashlightCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([flashlightCapability]);
+
+      final command = FlashlightCommand(action: FlashlightAction.on);
+      expect(orchestrator.canHandleCommand(command), isTrue);
+    });
+
+    test('canHandleCommand returns false for unsupported flashlight commands', () async {
+      final platform = MockAssistantPlatform();
+      final flashlightCapability = TestCapability(false, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([flashlightCapability]);
+
+      final command = FlashlightCommand(action: FlashlightAction.on);
+      expect(orchestrator.canHandleCommand(command), isFalse);
+    });
+
+    test('propagates flashlight capability execution results', () async {
+      final platform = MockAssistantPlatform();
+      final flashlightCapability = TestCapability(
+          true, ExecutionResult.failure('Test failure'));
+      final orchestrator = AssistantOrchestrator([flashlightCapability]);
+
+      final command = FlashlightCommand(action: FlashlightAction.on);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.status, equals(ExecutionStatus.failure));
+      expect(result.message, equals('Test failure'));
+    });
+
+    test('does not execute unrelated capability for flashlight command', () async {
+      final platform = MockAssistantPlatform();
+      // First capability says it can't handle the command
+      final incapable = TestCapability(false, ExecutionResult.success());
+      // Second capability says it can handle and returns success
+      final capable = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([incapable, capable]);
+
+      final command = FlashlightCommand(action: FlashlightAction.on);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+  });
+
+  group('ScreenshotCapability', () {
+    test('routes screenshot command to screenshot capability', () async {
+      final platform = MockAssistantPlatform();
+      final screenshotCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([screenshotCapability]);
+
+      final command = ScreenshotCommand();
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('returns unsupported result for unsupported screenshot command', () async {
+      final platform = MockAssistantPlatform();
+      final screenshotCapability = TestCapability(false, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([screenshotCapability]);
+
+      final command = ScreenshotCommand();
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.status, equals(ExecutionStatus.unsupported));
+      expect(result.message, contains('No capability found'));
+    });
+
+    test('canHandleCommand returns true for supported screenshot commands', () async {
+      final platform = MockAssistantPlatform();
+      final screenshotCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([screenshotCapability]);
+
+      final command = ScreenshotCommand();
+      expect(orchestrator.canHandleCommand(command), isTrue);
+    });
+
+    test('canHandleCommand returns false for unsupported screenshot commands', () async {
+      final platform = MockAssistantPlatform();
+      final screenshotCapability = TestCapability(false, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([screenshotCapability]);
+
+      final command = ScreenshotCommand();
+      expect(orchestrator.canHandleCommand(command), isFalse);
+    });
+
+    test('propagates screenshot capability execution results', () async {
+      final platform = MockAssistantPlatform();
+      final screenshotCapability = TestCapability(
+          true, ExecutionResult.failure('Test failure'));
+      final orchestrator = AssistantOrchestrator([screenshotCapability]);
+
+      final command = ScreenshotCommand();
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.status, equals(ExecutionStatus.failure));
+      expect(result.message, equals('Test failure'));
+    });
+
+    test('does not execute unrelated capability for screenshot command', () async {
+      final platform = MockAssistantPlatform();
+      // First capability says it can't handle the command
+      final incapable = TestCapability(false, ExecutionResult.success());
+      // Second capability says it can handle and returns success
+      final capable = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([incapable, capable]);
+
+      final command = ScreenshotCommand();
       final result = await orchestrator.executeCommand(command);
 
       expect(result.isSuccess, isTrue);

@@ -11,6 +11,8 @@ import 'package:voice_assistant/models/wifi_result.dart';
 import 'package:voice_assistant/models/mobile_data_result.dart';
 import 'package:voice_assistant/models/hotspot_result.dart';
 import 'package:voice_assistant/models/settings_result.dart';
+import 'package:voice_assistant/models/flashlight_result.dart';
+import 'package:voice_assistant/models/screenshot_result.dart';
 
 abstract interface class AssistantPlatform {
   Future<AssistantIntegrationStatus> getIntegrationStatus();
@@ -40,6 +42,10 @@ abstract interface class AssistantPlatform {
   Future<SttState> getSpeechRecognitionStatus();
   Stream<Map<Object?, Object?>> get events;
 
+  // Wake word methods
+  Future<void> startWakeWordDetection();
+  Future<void> stopWakeWordDetection();
+
   // Bluetooth methods
   Future<BluetoothStatusResult> getBluetoothStatus();
   Future<BluetoothActionResult> requestBluetoothEnable();
@@ -60,6 +66,13 @@ abstract interface class AssistantPlatform {
   Future<SettingsActionResult> openWifiSettings();
   Future<SettingsActionResult> openMobileDataSettings();
   Future<SettingsActionResult> openHotspotSettings();
+
+  // Flashlight methods
+  Future<FlashlightAvailabilityResult> getFlashlightAvailability();
+  Future<FlashlightActionResult> setFlashlightEnabled(bool enabled);
+
+  // Screenshot methods
+  Future<ScreenshotActionResult> takeScreenshot();
 }
 
 class MethodChannelAssistantPlatform implements AssistantPlatform {
@@ -749,6 +762,101 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
     } on MissingPluginException {
       print('DIAG: Platform.openHotspotSettings() MissingPluginException');
       return const SettingsActionResult(status: SettingsActionStatus.failure, message: 'Settings not available on this platform');
+    }
+  }
+
+  // Flashlight methods implementation
+  @override
+  Future<FlashlightAvailabilityResult> getFlashlightAvailability() async {
+    print('DIAG: Platform.getFlashlightAvailability() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('getFlashlightAvailability');
+      print('DIAG: Platform.getFlashlightAvailability() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.getFlashlightAvailability() result not Map');
+        return const FlashlightAvailabilityResult(status: FlashlightStatus.unavailable, message: 'Invalid response from Android');
+      }
+      final availabilityResult = FlashlightAvailabilityResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.getFlashlightAvailability() returning: $availabilityResult');
+      return availabilityResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getFlashlightAvailability() PlatformException: $e');
+      return FlashlightAvailabilityResult(status: FlashlightStatus.unavailable, message: e.message ?? 'Failed to get flashlight availability');
+    } on MissingPluginException {
+      print('DIAG: Platform.getFlashlightAvailability() MissingPluginException');
+      return const FlashlightAvailabilityResult(status: FlashlightStatus.unavailable, message: 'Flashlight not available on this platform');
+    }
+  }
+
+  @override
+  Future<FlashlightActionResult> setFlashlightEnabled(bool enabled) async {
+    print('DIAG: Platform.setFlashlightEnabled() entered with enabled: $enabled');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>(
+          enabled ? 'enableFlashlight' : 'disableFlashlight', {});
+      print('DIAG: Platform.setFlashlightEnabled() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.setFlashlightEnabled() result not Map');
+        return const FlashlightActionResult(status: FlashlightActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = FlashlightActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.setFlashlightEnabled() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.setFlashlightEnabled() PlatformException: $e');
+      return FlashlightActionResult(status: FlashlightActionStatus.failure, message: e.message ?? 'Failed to ${enabled ? 'enable' : 'disable'} flashlight');
+    } on MissingPluginException {
+      print('DIAG: Platform.setFlashlightEnabled() MissingPluginException');
+      return const FlashlightActionResult(status: FlashlightActionStatus.unsupported, message: 'Flashlight not available on this platform');
+    }
+  }
+
+  // Screenshot methods implementation
+  @override
+  Future<ScreenshotActionResult> takeScreenshot() async {
+    print('DIAG: Platform.takeScreenshot() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<Object?>('takeScreenshot');
+      print('DIAG: Platform.takeScreenshot() got result: $result');
+      if (result is! Map) {
+        print('DIAG: Platform.takeScreenshot() result not Map');
+        return const ScreenshotActionResult(status: ScreenshotActionStatus.failure, message: 'Invalid response from Android');
+      }
+      final actionResult = ScreenshotActionResult.fromMap(result.cast<String, dynamic>());
+      print('DIAG: Platform.takeScreenshot() returning: $actionResult');
+      return actionResult;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.takeScreenshot() PlatformException: $e');
+      return ScreenshotActionResult(status: ScreenshotActionStatus.failure, message: e.message ?? 'Failed to take screenshot');
+    } on MissingPluginException {
+      print('DIAG: Platform.takeScreenshot() MissingPluginException');
+      return const ScreenshotActionResult(status: ScreenshotActionStatus.unsupported, message: 'Screenshot not available on this platform');
+    }
+  }
+
+  @override
+  Future<void> startWakeWordDetection() async {
+    print('DIAG: Platform.startWakeWordDetection() entered');
+    try {
+      await _methodChannel.invokeMethod<void>('startWakeWordDetection');
+      print('DIAG: Platform.startWakeWordDetection() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.startWakeWordDetection() PlatformException: $e');
+    } on MissingPluginException {
+      print('DIAG: Platform.startWakeWordDetection() MissingPluginException');
+    }
+  }
+
+  @override
+  Future<void> stopWakeWordDetection() async {
+    print('DIAG: Platform.stopWakeWordDetection() entered');
+    try {
+      await _methodChannel.invokeMethod<void>('stopWakeWordDetection');
+      print('DIAG: Platform.stopWakeWordDetection() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.stopWakeWordDetection() PlatformException: $e');
+    } on MissingPluginException {
+      print('DIAG: Platform.stopWakeWordDetection() MissingPluginException');
     }
   }
 }
