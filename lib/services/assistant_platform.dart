@@ -42,6 +42,10 @@ abstract interface class AssistantPlatform {
   Future<SttState> getSpeechRecognitionStatus();
   Stream<Map<Object?, Object?>> get events;
 
+  // Bluetooth permission methods
+  Future<bool> hasBluetoothPermission();
+  Future<bool> requestBluetoothPermission();
+
   // Wake word methods
   Future<void> startWakeWordDetection();
   Future<void> stopWakeWordDetection();
@@ -73,6 +77,29 @@ abstract interface class AssistantPlatform {
 
   // Screenshot methods
   Future<ScreenshotActionResult> takeScreenshot();
+
+  // WhatsApp methods
+  Future<bool> isWhatsAppAvailable();
+  Future<Object> sendWhatsAppMessage({
+    required String phoneNumber,
+    required String message,
+  });
+  Future<Object> makeWhatsAppCall({
+    required String phoneNumber,
+    required bool isVideo,
+  });
+
+  // Spotify methods
+  Future<bool> isSpotifyInstalled();
+  Future<void> openSpotify();
+  Future<void> playSpotify();
+  Future<void> pauseSpotify();
+  Future<void> resumeSpotify();
+  Future<void> nextSpotify();
+  Future<void> previousSpotify();
+  Future<void> searchAndPlayTrack(String query);
+  Future<void> searchAndPlayArtist(String query);
+  Future<void> searchAndPlayPlaylist(String query);
 }
 
 class MethodChannelAssistantPlatform implements AssistantPlatform {
@@ -332,6 +359,23 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
     );
     final granted = result is Map && result['granted'] == true;
     print('DIAG: Platform.requestMicrophonePermission() returning: $granted');
+    return granted;
+  }
+
+  @override
+  Future<bool> hasBluetoothPermission() async {
+    print('DIAG: Platform.hasBluetoothPermission() entered');
+    final result = await _methodChannel.invokeMethod<bool>('hasBluetoothPermission') ?? false;
+    print('DIAG: Platform.hasBluetoothPermission() returning: $result');
+    return result;
+  }
+
+  @override
+  Future<bool> requestBluetoothPermission() async {
+    print('DIAG: Platform.requestBluetoothPermission() entered');
+    final result = await _methodChannel.invokeMethod<Object?>('requestBluetoothPermission');
+    final granted = result is Map && result['granted'] == true;
+    print('DIAG: Platform.requestBluetoothPermission() returning: $granted');
     return granted;
   }
 
@@ -857,6 +901,300 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
       print('DIAG: Platform.stopWakeWordDetection() PlatformException: $e');
     } on MissingPluginException {
       print('DIAG: Platform.stopWakeWordDetection() MissingPluginException');
+    }
+  }
+
+  // WhatsApp methods implementation
+  @override
+  Future<bool> isWhatsAppAvailable() async {
+    print('DIAG: Platform.isWhatsAppAvailable() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('isWhatsAppAvailable');
+      print('DIAG: Platform.isWhatsAppAvailable() got result: $result');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.isWhatsAppAvailable() PlatformException: $e');
+      return false;
+    } on MissingPluginException {
+      print('DIAG: Platform.isWhatsAppAvailable() MissingPluginException');
+      return false;
+    }
+  }
+
+  @override
+  Future<Object> sendWhatsAppMessage({
+    required String phoneNumber,
+    required String message,
+  }) async {
+    print('DIAG: Platform.sendWhatsAppMessage() entered with phoneNumber: $phoneNumber, message length: ${message.length}');
+    try {
+      final result = await _methodChannel.invokeMethod<Object>(
+        'sendWhatsAppMessage',
+        {
+          'phoneNumber': phoneNumber,
+          'message': message,
+        },
+      );
+      print('DIAG: Platform.sendWhatsAppMessage() got result: $result');
+      return result ?? '';
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.sendWhatsAppMessage() PlatformException: $e');
+      throw PlatformException(
+        code: 'whatsapp_message_failed',
+        message: e.message ?? 'Failed to send WhatsApp message',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.sendWhatsAppMessage() MissingPluginException');
+      throw PlatformException(
+        code: 'whatsapp_not_available',
+        message: 'WhatsApp not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<Object> makeWhatsAppCall({
+    required String phoneNumber,
+    required bool isVideo,
+  }) async {
+    print('DIAG: Platform.makeWhatsAppCall() entered with phoneNumber: $phoneNumber, isVideo: $isVideo');
+    try {
+      final result = await _methodChannel.invokeMethod<Object>(
+        'makeWhatsAppCall',
+        {
+          'phoneNumber': phoneNumber,
+          'isVideo': isVideo,
+        },
+      );
+      print('DIAG: Platform.makeWhatsAppCall() got result: $result');
+      return result ?? '';
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.makeWhatsAppCall() PlatformException: $e');
+      throw PlatformException(
+        code: 'whatsapp_call_failed',
+        message: e.message ?? 'Failed to make WhatsApp call',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.makeWhatsAppCall() MissingPluginException');
+      throw PlatformException(
+        code: 'whatsapp_not_available',
+        message: 'WhatsApp not available on this platform',
+      );
+    }
+  }
+
+  // Spotify methods
+  @override
+  Future<bool> isSpotifyInstalled() async {
+    print('DIAG: Platform.isSpotifyInstalled() entered');
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('isSpotifyInstalled');
+      print('DIAG: Platform.isSpotifyInstalled() got result: $result');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.isSpotifyInstalled() PlatformException: $e');
+      return false;
+    } on MissingPluginException {
+      print('DIAG: Platform.isSpotifyInstalled() MissingPluginException');
+      return false;
+    }
+  }
+
+  @override
+  Future<void> openSpotify() async {
+    print('DIAG: Platform.openSpotify() entered');
+    try {
+      await _methodChannel.invokeMethod<void>('openSpotify');
+      print('DIAG: Platform.openSpotify() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.openSpotify() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_open_failed',
+        message: e.message ?? 'Failed to open Spotify',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.openSpotify() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<void> playSpotify() async {
+    print('DIAG: Platform.playSpotify() entered');
+    try {
+      await _methodChannel.invokeMethod<void>('playSpotify');
+      print('DIAG: Platform.playSpotify() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.playSpotify() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_play_failed',
+        message: e.message ?? 'Failed to play Spotify',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.playSpotify() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<void> pauseSpotify() async {
+    print('DIAG: Platform.pauseSpotify() entered');
+    try {
+      await _methodChannel.invokeMethod<void>('pauseSpotify');
+      print('DIAG: Platform.pauseSpotify() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.pauseSpotify() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_pause_failed',
+        message: e.message ?? 'Failed to pause Spotify',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.pauseSpotify() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<void> resumeSpotify() async {
+    print('DIAG: Platform.resumeSpotify() entered');
+    try {
+      await _methodChannel.invokeMethod<void>('resumeSpotify');
+      print('DIAG: Platform.resumeSpotify() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.resumeSpotify() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_resume_failed',
+        message: e.message ?? 'Failed to resume Spotify',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.resumeSpotify() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<void> nextSpotify() async {
+    print('DIAG: Platform.nextSpotify() entered');
+    try {
+      await _methodChannel.invokeMethod<void>('nextSpotify');
+      print('DIAG: Platform.nextSpotify() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.nextSpotify() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_next_failed',
+        message: e.message ?? 'Failed to skip to next track',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.nextSpotify() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<void> previousSpotify() async {
+    print('DIAG: Platform.previousSpotify() entered');
+    try {
+      await _methodChannel.invokeMethod<void>('previousSpotify');
+      print('DIAG: Platform.previousSpotify() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.previousSpotify() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_previous_failed',
+        message: e.message ?? 'Failed to skip to previous track',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.previousSpotify() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<void> searchAndPlayTrack(String query) async {
+    print('DIAG: Platform.searchAndPlayTrack() entered with query: $query');
+    try {
+      await _methodChannel.invokeMethod<void>(
+        'searchAndPlayTrack',
+        {'query': query},
+      );
+      print('DIAG: Platform.searchAndPlayTrack() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.searchAndPlayTrack() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_search_and_play_track_failed',
+        message: e.message ?? 'Failed to search and play track',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.searchAndPlayTrack() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<void> searchAndPlayArtist(String query) async {
+    print('DIAG: Platform.searchAndPlayArtist() entered with query: $query');
+    try {
+      await _methodChannel.invokeMethod<void>(
+        'searchAndPlayArtist',
+        {'query': query},
+      );
+      print('DIAG: Platform.searchAndPlayArtist() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.searchAndPlayArtist() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_search_and_play_artist_failed',
+        message: e.message ?? 'Failed to search and play artist',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.searchAndPlayArtist() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
+    }
+  }
+
+  @override
+  Future<void> searchAndPlayPlaylist(String query) async {
+    print('DIAG: Platform.searchAndPlayPlaylist() entered with query: $query');
+    try {
+      await _methodChannel.invokeMethod<void>(
+        'searchAndPlayPlaylist',
+        {'query': query},
+      );
+      print('DIAG: Platform.searchAndPlayPlaylist() completed');
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.searchAndPlayPlaylist() PlatformException: $e');
+      throw PlatformException(
+        code: 'spotify_search_and_play_playlist_failed',
+        message: e.message ?? 'Failed to search and play playlist',
+      );
+    } on MissingPluginException {
+      print('DIAG: Platform.searchAndPlayPlaylist() MissingPluginException');
+      throw PlatformException(
+        code: 'spotify_not_available',
+        message: 'Spotify not available on this platform',
+      );
     }
   }
 }

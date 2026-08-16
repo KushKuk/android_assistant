@@ -5,6 +5,7 @@ import 'package:voice_assistant/capabilities/bluetooth_capability.dart';
 import 'package:voice_assistant/capabilities/connectivity_capability.dart';
 import 'package:voice_assistant/capabilities/flashlight_capability.dart';
 import 'package:voice_assistant/capabilities/screenshot_capability.dart';
+import 'package:voice_assistant/capabilities/spotify_capability.dart';
 import 'package:voice_assistant/commands/assistant_command.dart';
 import 'package:voice_assistant/commands/command_parser.dart';
 import 'package:voice_assistant/models/execution_result.dart';
@@ -46,6 +47,9 @@ class MockAssistantPlatform implements AssistantPlatform {
   final _eventController =
       StreamController<Map<Object?, Object?>>.broadcast();
 
+  bool hasBluetoothPermissionValue = false;
+  bool requestBluetoothPermissionResult = false;
+
   @override
   Stream<Map<Object?, Object?>> get events => _eventController.stream;
 
@@ -66,6 +70,13 @@ class MockAssistantPlatform implements AssistantPlatform {
 
   @override
   Future<bool> requestContactsPermission() async => true;
+
+  // Bluetooth permission methods
+  @override
+  Future<bool> hasBluetoothPermission() async => hasBluetoothPermissionValue;
+
+  @override
+  Future<bool> requestBluetoothPermission() async => requestBluetoothPermissionResult;
 
   @override
   Future<ContactSearchResult> resolveContacts(String query) async =>
@@ -209,6 +220,53 @@ class MockAssistantPlatform implements AssistantPlatform {
   Future<void> stopWakeWordDetection() async {
     // Mock implementation for testing
   }
+
+  // Spotify methods
+  @override
+  Future<bool> isSpotifyInstalled() async => true;
+
+  @override
+  Future<void> openSpotify() async {}
+
+  @override
+  Future<void> playSpotify() async {}
+
+  @override
+  Future<void> pauseSpotify() async {}
+
+  @override
+  Future<void> resumeSpotify() async {}
+
+  @override
+  Future<void> nextSpotify() async {}
+
+  @override
+  Future<void> previousSpotify() async {}
+
+  @override
+  Future<void> searchAndPlayTrack(String query) async {}
+
+  @override
+  Future<void> searchAndPlayArtist(String query) async {}
+
+  @override
+  Future<void> searchAndPlayPlaylist(String query) async {}
+
+  // WhatsApp methods
+  @override
+  Future<bool> isWhatsAppAvailable() async => true;
+
+  @override
+  Future<Object> sendWhatsAppMessage({
+    required String phoneNumber,
+    required String message,
+  }) async => {'success': true, 'messageId': 'test-123'};
+
+  @override
+  Future<Object> makeWhatsAppCall({
+    required String phoneNumber,
+    required bool isVideo,
+  }) async => {'success': true, 'callId': 'test-456'};
 }
 
 void main() {
@@ -519,6 +577,120 @@ void main() {
       final orchestrator = AssistantOrchestrator([incapable, capable]);
 
       final command = ScreenshotCommand();
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+  });
+
+  group('SpotifyCapability', () {
+    test('routes Spotify open command to Spotify capability', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyOpenCommand();
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('routes Spotify playback command to Spotify capability', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyPlaybackCommand(action: SpotifyPlaybackAction.play);
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('routes Spotify play track command to Spotify capability', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyPlayTrackCommand(query: 'test song');
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('routes Spotify play artist command to Spotify capability', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyPlayArtistCommand(query: 'test artist');
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('routes Spotify play playlist command to Spotify capability', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyPlayPlaylistCommand(query: 'test playlist');
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('returns unsupported result for unsupported Spotify command', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(false, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyOpenCommand();
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.status, equals(ExecutionStatus.unsupported));
+      expect(result.message, contains('No capability found'));
+    });
+
+    test('canHandleCommand returns true for supported Spotify commands', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyOpenCommand();
+      expect(orchestrator.canHandleCommand(command), isTrue);
+    });
+
+    test('canHandleCommand returns false for unsupported Spotify commands', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(false, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyOpenCommand();
+      expect(orchestrator.canHandleCommand(command), isFalse);
+    });
+
+    test('propagates Spotify capability execution results', () async {
+      final platform = MockAssistantPlatform();
+      final spotifyCapability = TestCapability(
+          true, ExecutionResult.failure('Test failure'));
+      final orchestrator = AssistantOrchestrator([spotifyCapability]);
+
+      final command = SpotifyOpenCommand();
+      final result = await orchestrator.executeCommand(command);
+
+      expect(result.status, equals(ExecutionStatus.failure));
+      expect(result.message, equals('Test failure'));
+    });
+
+    test('does not execute unrelated capability for Spotify command', () async {
+      final platform = MockAssistantPlatform();
+      // First capability says it can't handle the command
+      final incapable = TestCapability(false, ExecutionResult.success());
+      // Second capability says it can handle and returns success
+      final capable = TestCapability(true, ExecutionResult.success());
+      final orchestrator = AssistantOrchestrator([incapable, capable]);
+
+      final command = SpotifyOpenCommand();
       final result = await orchestrator.executeCommand(command);
 
       expect(result.isSuccess, isTrue);

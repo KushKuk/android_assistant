@@ -5,9 +5,12 @@ import android.app.Activity
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.util.Log
+import android.view.KeyEvent
 import com.example.voice_assistant.bluetooth.BluetoothManager
 import com.example.voice_assistant.calls.CallRequest
 import com.example.voice_assistant.calls.SafeCallPipeline
@@ -38,6 +41,7 @@ class AssistantBridge(
     private var pendingContactsPermissionResult: MethodChannel.Result? = null
     private var pendingCallPermissionResult: MethodChannel.Result? = null
     private var pendingMicrophonePermissionResult: MethodChannel.Result? = null
+    private var pendingBluetoothPermissionResult: MethodChannel.Result? = null
 
     fun register() {
         methodChannel.setMethodCallHandler(this)
@@ -67,6 +71,8 @@ class AssistantBridge(
             "getTtsStatus" -> result.success(tts.getStatus())
             "hasMicrophonePermission" -> result.success(hasMicrophonePermission())
             "requestMicrophonePermission" -> requestMicrophonePermission(result)
+            "hasBluetoothPermission" -> result.success(hasBluetoothPermission())
+            "requestBluetoothPermission" -> requestBluetoothPermission(result)
             "startListening" -> {
                 if (!hasMicrophonePermission()) {
                     result.error("permission_required", "Microphone permission is required.", null)
@@ -134,6 +140,45 @@ class AssistantBridge(
             "openWifiSettings" -> result.success(openWifiSettings().toMap())
             "openMobileDataSettings" -> result.success(openMobileDataSettings().toMap())
             "openHotspotSettings" -> result.success(openHotspotSettings().toMap())
+
+            // Spotify methods
+            "isSpotifyInstalled" -> result.success(isSpotifyInstalled())
+            "openSpotify" -> { openSpotify(); result.success(null) }
+            "playSpotify" -> { playSpotify(); result.success(null) }
+            "pauseSpotify" -> { pauseSpotify(); result.success(null) }
+            "resumeSpotify" -> { resumeSpotify(); result.success(null) }
+            "nextSpotify" -> { nextSpotify(); result.success(null) }
+            "previousSpotify" -> { previousSpotify(); result.success(null) }
+            "searchAndPlayTrack" -> {
+                val arguments = call.arguments as? Map<*, *>
+                val query = arguments?.get("query") as? String
+                if (query.isNullOrBlank()) {
+                    result.error("invalid_arguments", "Query is required.", null)
+                    return
+                }
+                searchAndPlayTrack(query)
+                result.success(null)
+            }
+            "searchAndPlayArtist" -> {
+                val arguments = call.arguments as? Map<*, *>
+                val query = arguments?.get("query") as? String
+                if (query.isNullOrBlank()) {
+                    result.error("invalid_arguments", "Query is required.", null)
+                    return
+                }
+                searchAndPlayArtist(query)
+                result.success(null)
+            }
+            "searchAndPlayPlaylist" -> {
+                val arguments = call.arguments as? Map<*, *>
+                val query = arguments?.get("query") as? String
+                if (query.isNullOrBlank()) {
+                    result.error("invalid_arguments", "Query is required.", null)
+                    return
+                }
+                searchAndPlayPlaylist(query)
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -173,6 +218,11 @@ class AssistantBridge(
             MICROPHONE_PERMISSION_REQUEST_CODE -> {
                 pendingMicrophonePermissionResult?.success(mapOf("granted" to granted))
                 pendingMicrophonePermissionResult = null
+                true
+            }
+            BLUETOOTH_PERMISSION_REQUEST_CODE -> {
+                pendingBluetoothPermissionResult?.success(mapOf("granted" to granted))
+                pendingBluetoothPermissionResult = null
                 true
             }
             else -> false
@@ -234,6 +284,27 @@ class AssistantBridge(
             arrayOf(Manifest.permission.RECORD_AUDIO),
             MICROPHONE_PERMISSION_REQUEST_CODE,
         )
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        return bluetoothManager.hasBluetoothPermissions()
+    }
+
+    private fun requestBluetoothPermission(result: MethodChannel.Result) {
+        if (hasBluetoothPermission()) {
+            result.success(mapOf("granted" to true))
+            return
+        }
+        if (pendingBluetoothPermissionResult != null) {
+            result.error("permission_request_in_progress", "A Bluetooth permission request is already active.", null)
+            return
+        }
+        pendingBluetoothPermissionResult = result
+        // Use BluetoothManager to request permission
+        bluetoothManager.requestBluetoothPermission(activity) { granted ->
+            pendingBluetoothPermissionResult?.success(mapOf("granted" to granted))
+            pendingBluetoothPermissionResult = null
+        }
     }
 
     private fun resolveContacts(call: MethodCall, result: MethodChannel.Result) {
@@ -316,6 +387,161 @@ class AssistantBridge(
     fun dispose() {
         tts.shutdown()
         stt.shutdown()
+    }
+
+    // Spotify methods
+    @SuppressLint("QueryPermissionsNeeded")
+    private fun isSpotifyInstalled(): Boolean {
+        Log.d("AssistantBridge", "isSpotifyInstalled() entered")
+        // Check if Spotify package is installed
+        val packageManager = activity.packageManager
+        return try {
+            packageManager.getPackageInfo("com.spotify.music", 0)
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    @SuppressLint("QueryPermissionsNeeded")
+    private fun openSpotify() {
+        Log.d("AssistantBridge", "openSpotify() entered")
+        val packageManager = activity.packageManager
+        val intent = packageManager.getLaunchIntentForPackage("com.spotify.music")
+        if (intent != null) {
+            activity.startActivity(intent)
+        } else {
+            // If Spotify is not installed, open Play Store
+            val playStoreIntent = Intent(Intent.ACTION_VIEW)
+            playStoreIntent.data = Uri.parse("market://details?id=com.spotify.music")
+            activity.startActivity(playStoreIntent)
+        }
+    }
+
+    private fun playSpotify() {
+        Log.d("AssistantBridge", "playSpotify() entered")
+        // Send play command to Spotify using media button intent
+        val intent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+        }
+        activity.sendOrderedBroadcast(intent, null)
+
+        // Also send the key up event
+        val intentUp = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+        }
+        activity.sendOrderedBroadcast(intentUp, null)
+    }
+
+    private fun pauseSpotify() {
+        Log.d("AssistantBridge", "pauseSpotify() entered")
+        // Send pause command to Spotify using media button intent
+        val intent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE))
+        }
+        activity.sendOrderedBroadcast(intent, null)
+
+        // Also send the key up event
+        val intentUp = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE))
+        }
+        activity.sendOrderedBroadcast(intentUp, null)
+    }
+
+    private fun resumeSpotify() {
+        Log.d("AssistantBridge", "resumeSpotify() entered")
+        // Resume is the same as play for Spotify
+        playSpotify()
+    }
+
+    private fun nextSpotify() {
+        Log.d("AssistantBridge", "nextSpotify() entered")
+        // Send next track command to Spotify using media button intent
+        val intent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT))
+        }
+        activity.sendOrderedBroadcast(intent, null)
+
+        // Also send the key up event
+        val intentUp = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT))
+        }
+        activity.sendOrderedBroadcast(intentUp, null)
+    }
+
+    private fun previousSpotify() {
+        Log.d("AssistantBridge", "previousSpotify() entered")
+        // Send previous track command to Spotify using media button intent
+        val intent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+        }
+        activity.sendOrderedBroadcast(intent, null)
+
+        // Also send the key up event
+        val intentUp = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+        }
+        activity.sendOrderedBroadcast(intentUp, null)
+    }
+
+    @SuppressLint("QueryPermissionsNeeded")
+    private fun searchAndPlayTrack(query: String) {
+        Log.d("AssistantBridge", "searchAndPlayTrack() entered with query: $query")
+        // Search and play track using Spotify search URI
+        val searchUri = Uri.parse("spotify:search:$query")
+        val intent = Intent(Intent.ACTION_VIEW, searchUri).apply {
+            setPackage("com.spotify.music")
+        }
+
+        // Verify if there's an activity to handle the intent
+        if (intent.resolveActivity(activity.packageManager) != null) {
+            activity.startActivity(intent)
+        } else {
+            // Fallback to web search if Spotify URI handling fails
+            val webSearchUri = Uri.parse("https://open.spotify.com/search/$query")
+            val webIntent = Intent(Intent.ACTION_VIEW, webSearchUri)
+            activity.startActivity(webIntent)
+        }
+    }
+
+    @SuppressLint("QueryPermissionsNeeded")
+    private fun searchAndPlayArtist(query: String) {
+        Log.d("AssistantBridge", "searchAndPlayArtist() entered with query: $query")
+        // Search and play artist using Spotify search URI
+        val searchUri = Uri.parse("spotify:search:$query")
+        val intent = Intent(Intent.ACTION_VIEW, searchUri).apply {
+            setPackage("com.spotify.music")
+        }
+
+        // Verify if there's an activity to handle the intent
+        if (intent.resolveActivity(activity.packageManager) != null) {
+            activity.startActivity(intent)
+        } else {
+            // Fallback to web search if Spotify URI handling fails
+            val webSearchUri = Uri.parse("https://open.spotify.com/search/$query")
+            val webIntent = Intent(Intent.ACTION_VIEW, webSearchUri)
+            activity.startActivity(webIntent)
+        }
+    }
+
+    @SuppressLint("QueryPermissionsNeeded")
+    private fun searchAndPlayPlaylist(query: String) {
+        Log.d("AssistantBridge", "searchAndPlayPlaylist() entered with query: $query")
+        // Search and play playlist using Spotify search URI
+        val searchUri = Uri.parse("spotify:search:$query")
+        val intent = Intent(Intent.ACTION_VIEW, searchUri).apply {
+            setPackage("com.spotify.music")
+        }
+
+        // Verify if there's an activity to handle the intent
+        if (intent.resolveActivity(activity.packageManager) != null) {
+            activity.startActivity(intent)
+        } else {
+            // Fallback to web search if Spotify URI handling fails
+            val webSearchUri = Uri.parse("https://open.spotify.com/search/$query")
+            val webIntent = Intent(Intent.ACTION_VIEW, webSearchUri)
+            activity.startActivity(webIntent)
+        }
     }
 
     // Bluetooth methods
@@ -443,12 +669,13 @@ class AssistantBridge(
         return result
     }
 
-    private companion object {
+    companion object {
         const val METHOD_CHANNEL = "com.example.voice_assistant/assistant"
         const val EVENT_CHANNEL = "com.example.voice_assistant/assistant_events"
         const val CONTACTS_PERMISSION_REQUEST_CODE = 4001
         const val CALL_PERMISSION_REQUEST_CODE = 4002
         const val MICROPHONE_PERMISSION_REQUEST_CODE = 4003
+        const val BLUETOOTH_PERMISSION_REQUEST_CODE = 4004
     }
 }
 

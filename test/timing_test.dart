@@ -61,6 +61,12 @@ class MockAssistantPlatform implements AssistantPlatform {
   Future<bool> hasMicrophonePermission() async => hasMicPermission;
 
   @override
+  Future<bool> hasBluetoothPermission() async => true;
+
+  @override
+  Future<bool> requestBluetoothPermission() async => true;
+
+  @override
   Future<bool> hasCallPermission() async => true;
 
   @override
@@ -178,6 +184,64 @@ class MockAssistantPlatform implements AssistantPlatform {
   @override
   Future<ScreenshotActionResult> takeScreenshot() async =>
       const ScreenshotActionResult(status: ScreenshotActionStatus.success);
+
+  // WhatsApp methods
+  @override
+  Future<bool> isWhatsAppAvailable() async => true;
+
+  @override
+  Future<Object> sendWhatsAppMessage({
+    required String phoneNumber,
+    required String message,
+  }) async => {'success': true, 'messageId': 'test-123'};
+
+  @override
+  Future<Object> makeWhatsAppCall({
+    required String phoneNumber,
+    required bool isVideo,
+  }) async => {'success': true, 'callId': 'test-456'};
+
+  // Wake word methods
+  @override
+  Future<void> startWakeWordDetection() async {
+    // Mock implementation for testing
+  }
+
+  @override
+  Future<void> stopWakeWordDetection() async {
+    // Mock implementation for testing
+  }
+
+  // Spotify methods
+  @override
+  Future<bool> isSpotifyInstalled() async => true;
+
+  @override
+  Future<void> openSpotify() async {}
+
+  @override
+  Future<void> playSpotify() async {}
+
+  @override
+  Future<void> pauseSpotify() async {}
+
+  @override
+  Future<void> resumeSpotify() async {}
+
+  @override
+  Future<void> nextSpotify() async {}
+
+  @override
+  Future<void> previousSpotify() async {}
+
+  @override
+  Future<void> searchAndPlayTrack(String query) async {}
+
+  @override
+  Future<void> searchAndPlayArtist(String query) async {}
+
+  @override
+  Future<void> searchAndPlayPlaylist(String query) async {}
 }
 
 void main() {

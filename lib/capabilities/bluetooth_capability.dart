@@ -16,26 +16,18 @@ class BluetoothCapability implements AssistantCapability {
 
   @override
   bool canHandle(AssistantCommand command) {
-    print('DIAG: BluetoothCapability.canHandle() called with command: $command');
-    final result = command is BluetoothCommand;
-    print('DIAG: BluetoothCapability.canHandle() returning: $result');
-    return result;
+    return command is BluetoothCommand;
   }
 
   @override
   Future<ExecutionResult> execute(AssistantCommand command) async {
-    print('DIAG: BluetoothCapability.execute() called with command: $command');
     if (!canHandle(command)) {
-      print('DIAG: BluetoothCapability cannot handle command: $command');
       return ExecutionResult.invalidArguments(
           'BluetoothCapability can only handle BluetoothCommand');
     }
 
     final bluetoothCommand = command as BluetoothCommand;
-    print('DIAG: BluetoothCapability about to execute _executeBluetoothCommand');
-    final result = await _executeBluetoothCommand(bluetoothCommand);
-    print('DIAG: BluetoothCapability._executeBluetoothCommand returned: $result');
-    return result;
+    return await _executeBluetoothCommand(bluetoothCommand);
   }
 
   Future<ExecutionResult> _executeBluetoothCommand(

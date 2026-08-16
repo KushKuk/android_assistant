@@ -36,6 +36,12 @@ class MockAssistantPlatform implements AssistantPlatform {
   bool requestMicPermissionResult = true;
   bool hasContactPermission = true;
   bool requestContactPermissionResult = true;
+  bool hasBluetoothPermissionValue = false;
+  bool requestBluetoothPermissionResult = false;
+
+  // Optional override for Bluetooth enable/disable results
+  BluetoothActionResult? bluetoothEnableResult;
+  BluetoothActionResult? bluetoothDisableResult;
 
   @override
   Stream<Map<Object?, Object?>> get events => _eventController.stream;
@@ -81,6 +87,13 @@ class MockAssistantPlatform implements AssistantPlatform {
   @override
   Future<bool> requestContactsPermission() async => requestContactPermissionResult;
 
+  // Bluetooth permission methods
+  @override
+  Future<bool> hasBluetoothPermission() async => hasBluetoothPermissionValue;
+
+  @override
+  Future<bool> requestBluetoothPermission() async => requestBluetoothPermissionResult;
+
   @override
   Future<ContactSearchResult> resolveContacts(String query) async {
     return ContactSearchResult(query: query, candidates: []);
@@ -113,11 +126,11 @@ class MockAssistantPlatform implements AssistantPlatform {
 
   @override
   Future<BluetoothActionResult> requestBluetoothEnable() async =>
-      const BluetoothActionResult(status: BluetoothActionStatus.success);
+      bluetoothEnableResult ?? const BluetoothActionResult(status: BluetoothActionStatus.success);
 
   @override
   Future<BluetoothActionResult> requestBluetoothDisable() async =>
-      const BluetoothActionResult(status: BluetoothActionStatus.success);
+      bluetoothDisableResult ?? const BluetoothActionResult(status: BluetoothActionStatus.success);
 
   @override
   Future<BluetoothDeviceListResult> getBluetoothDevices({bool onlyBonded = false}) async =>
@@ -191,6 +204,53 @@ class MockAssistantPlatform implements AssistantPlatform {
   Future<void> stopWakeWordDetection() async {
     // Mock implementation for testing
   }
+
+  // Spotify methods
+  @override
+  Future<bool> isSpotifyInstalled() async => true;
+
+  @override
+  Future<void> openSpotify() async {}
+
+  @override
+  Future<void> playSpotify() async {}
+
+  @override
+  Future<void> pauseSpotify() async {}
+
+  @override
+  Future<void> resumeSpotify() async {}
+
+  @override
+  Future<void> nextSpotify() async {}
+
+  @override
+  Future<void> previousSpotify() async {}
+
+  @override
+  Future<void> searchAndPlayTrack(String query) async {}
+
+  @override
+  Future<void> searchAndPlayArtist(String query) async {}
+
+  @override
+  Future<void> searchAndPlayPlaylist(String query) async {}
+
+  // WhatsApp methods
+  @override
+  Future<bool> isWhatsAppAvailable() async => true;
+
+  @override
+  Future<Object> sendWhatsAppMessage({
+    required String phoneNumber,
+    required String message,
+  }) async => {'success': true, 'messageId': 'test-123'};
+
+  @override
+  Future<Object> makeWhatsAppCall({
+    required String phoneNumber,
+    required bool isVideo,
+  }) async => {'success': true, 'callId': 'test-456'};
 }
 
 void main() {
@@ -252,6 +312,10 @@ void main() {
     await Future.delayed(Duration.zero);
 
     platform.emitEvent({'type': 'final_transcript', 'text': 'call mom'});
+    await Future.delayed(Duration.zero);
+
+    // Stop listening to initiate command execution
+    await controller.stopListening();
     await Future.delayed(Duration.zero);
 
     // Since no contacts are found, the controller should be in error state
@@ -496,6 +560,10 @@ void main() {
     platform.emitEvent({'type': 'final_transcript', 'text': 'Call Mom'});
     await Future.delayed(Duration.zero);
 
+    // Stop listening to initiate command execution
+    await controller.stopListening();
+    await Future.delayed(Duration.zero);
+
     // After processing the command (which fails due to no contacts), the command is cleared
     expect(controller.lastCommandParseResult, isNull);
 
@@ -515,6 +583,10 @@ void main() {
     await Future.delayed(Duration.zero);
 
     platform.emitEvent({'type': 'final_transcript', 'text': 'Call Mom'});
+    await Future.delayed(Duration.zero);
+
+    // Stop listening to initiate command execution
+    await controller.stopListening();
     await Future.delayed(Duration.zero);
 
     // After requesting permission and granting it, the command is processed and then cleared
@@ -538,6 +610,10 @@ void main() {
     platform.emitEvent({'type': 'final_transcript', 'text': 'Call Mom'});
     await Future.delayed(Duration.zero);
 
+    // Stop listening to initiate command execution
+    await controller.stopListening();
+    await Future.delayed(Duration.zero);
+
     // When permission is denied, the command is cleared
     expect(controller.lastCommandParseResult, isNull);
 
@@ -559,13 +635,143 @@ void main() {
     platform.emitEvent({'type': 'final_transcript', 'text': 'Call Mom'});
     await Future.delayed(Duration.zero);
 
-    // Should have parsed the command
+    // Verify that the command was parsed before execution
     expect(controller.lastCommandParseResult, isNotNull);
     expect(controller.lastCommandParseResult!.isParsed, isTrue);
 
-    // Should not have requested permission since it was already granted
-    // We can't directly verify this with our mock, but we can verify the flow worked
+    // Stop listening to initiate command execution
+    await controller.stopListening();
+    await Future.delayed(Duration.zero);
+
+    // After execution, we should be in error state due to no contacts
+    // (since we have permission but no contacts exist)
     expect(controller.state, AssistantState.error);
     expect(controller.response, contains('Contact not found'));
+
+    // Note: The command is cleared after execution, so we don't check lastCommandParseResult here
+    // We inferred that we didn't request permission because we didn't get a permission error
+    // and we ended up in an error state due to no contacts.
+  });
+  test('Bluetooth userActionRequired transitions to error state', () async {
+    final repository = MockSettingsRepository();
+    final platform = MockAssistantPlatform();
+    // Ensure Bluetooth permission check passes
+    platform.hasBluetoothPermissionValue = true;
+    platform.requestBluetoothPermissionResult = true;
+    // Override the requestBluetoothEnable method to return userActionRequired
+    platform.bluetoothEnableResult = const BluetoothActionResult(
+        status: BluetoothActionStatus.userActionRequired,
+        message: 'Please enable Bluetooth in system settings');
+    final defaultSettings = AssistantSettings.defaults();
+    final controller = AssistantController(repository, defaultSettings, platform);
+
+    await controller.initializeNativeBridge();
+    await controller.startListening();
+    platform.emitEvent({'type': 'listening_started'});
+
+    // Simulate the user saying "Turn on Bluetooth"
+    platform.emitEvent({'type': 'final_transcript', 'text': 'Turn on Bluetooth'});
+    await Future.delayed(Duration.zero);
+
+    // Stop listening to initiate command execution
+    await controller.stopListening();
+    await Future.delayed(Duration.zero);
+
+    // Expect the state to be error and the message to be set
+    expect(controller.state, AssistantState.error);
+    expect(controller.response, equals('Please enable Bluetooth in system settings'));
+  });
+  test('Bluetooth success leaves processing state', () async {
+    final repository = MockSettingsRepository();
+    final platform = MockAssistantPlatform();
+    // Ensure Bluetooth permission check passes
+    platform.hasBluetoothPermissionValue = true;
+    platform.requestBluetoothPermissionResult = true;
+    // Override the requestBluetoothEnable method to return success
+    platform.bluetoothEnableResult = const BluetoothActionResult(
+        status: BluetoothActionStatus.success,
+        message: 'Bluetooth is already enabled');
+    final defaultSettings = AssistantSettings.defaults();
+    final controller = AssistantController(repository, defaultSettings, platform);
+
+    await controller.initializeNativeBridge();
+    await controller.startListening();
+    platform.emitEvent({'type': 'listening_started'});
+
+    // Simulate the user saying "Turn on Bluetooth" when it's already on
+    platform.emitEvent({'type': 'final_transcript', 'text': 'Turn on Bluetooth'});
+    await Future.delayed(Duration.zero);
+
+    // Stop listening to initiate command execution
+    await controller.stopListening();
+    await Future.delayed(Duration.zero);
+
+    // Expect the state to not be processing (i.e., command has been handled)
+    expect(controller.state, isNot(equals(AssistantState.processing)));
+    // Also expect the command to be cleared
+    expect(controller.lastCommandParseResult, isNull);
+  });
+  test('Bluetooth failure leaves processing state', () async {
+    final repository = MockSettingsRepository();
+    final platform = MockAssistantPlatform();
+    // Ensure Bluetooth permission check passes
+    platform.hasBluetoothPermissionValue = true;
+    platform.requestBluetoothPermissionResult = true;
+    // Override the requestBluetoothEnable method to return failure
+    platform.bluetoothEnableResult = const BluetoothActionResult(
+        status: BluetoothActionStatus.failure,
+        message: 'Failed to enable Bluetooth');
+    final defaultSettings = AssistantSettings.defaults();
+    final controller = AssistantController(repository, defaultSettings, platform);
+
+    await controller.initializeNativeBridge();
+    await controller.startListening();
+    platform.emitEvent({'type': 'listening_started'});
+
+    // Simulate the user saying "Turn on Bluetooth"
+    platform.emitEvent({'type': 'final_transcript', 'text': 'Turn on Bluetooth'});
+    await Future.delayed(Duration.zero);
+
+    // Stop listening to initiate command execution
+    await controller.stopListening();
+    await Future.delayed(Duration.zero);
+
+    // Expect the state to not be processing (i.e., command has been handled)
+    expect(controller.state, isNot(equals(AssistantState.processing)));
+    // Also expect the command to be cleared
+    expect(controller.lastCommandParseResult, isNull);
+  });
+
+  test('Bluetooth permissionRequired leaves processing state', () async {
+    final repository = MockSettingsRepository();
+    final platform = MockAssistantPlatform();
+    // Ensure Bluetooth permission check passes
+    platform.hasBluetoothPermissionValue = true;
+    platform.requestBluetoothPermissionResult = true;
+    // Override the requestBluetoothEnable method to return permissionRequired
+    platform.bluetoothEnableResult = const BluetoothActionResult(
+        status: BluetoothActionStatus.permissionRequired,
+        message: 'BLUETOOTH_CONNECT permission required');
+    final defaultSettings = AssistantSettings.defaults();
+    final controller = AssistantController(repository, defaultSettings, platform);
+
+    await controller.initializeNativeBridge();
+    await controller.startListening();
+    platform.emitEvent({'type': 'listening_started'});
+
+    // Simulate the user saying "Turn on Bluetooth"
+    platform.emitEvent({'type': 'final_transcript', 'text': 'Turn on Bluetooth'});
+    await Future.delayed(Duration.zero);
+
+    // Stop listening to initiate command execution
+    await controller.stopListening();
+    await Future.delayed(Duration.zero);
+
+    // Expect the state to not be processing (i.e., command has been handled)
+    expect(controller.state, isNot(equals(AssistantState.processing)));
+    // Also expect the command to be cleared
+    expect(controller.lastCommandParseResult, isNull);
   });
 }
+
+  

@@ -65,3 +65,73 @@ enum FlashlightAction { on, off }
 class ScreenshotCommand extends AssistantCommand {
   const ScreenshotCommand();
 }
+
+// ADD WHATSAPP COMMANDS
+class WhatsAppMessageCommand extends AssistantCommand {
+  const WhatsAppMessageCommand({
+    required this.contactQuery,
+    required this.message,
+    this.confirmed = false,
+  });
+
+  final String contactQuery;
+  final String message;
+  final bool confirmed;
+}
+
+class WhatsAppAudioCallCommand extends AssistantCommand {
+  const WhatsAppAudioCallCommand({
+    required this.contactQuery,
+    this.confirmed = false,
+  });
+
+  final String contactQuery;
+  final bool confirmed;
+}
+
+class WhatsAppVideoCallCommand extends AssistantCommand {
+  const WhatsAppVideoCallCommand({
+    required this.contactQuery,
+    this.confirmed = false,
+  });
+
+  final String contactQuery;
+  final bool confirmed;
+}
+
+// ADD SPOTIFY COMMANDS
+class SpotifyOpenCommand extends AssistantCommand {
+  const SpotifyOpenCommand();
+}
+
+class SpotifyPlaybackCommand extends AssistantCommand {
+  const SpotifyPlaybackCommand({required this.action});
+
+  final SpotifyPlaybackAction action;
+
+  bool get isPlay => action == SpotifyPlaybackAction.play;
+  bool get isPause => action == SpotifyPlaybackAction.pause;
+  bool get isResume => action == SpotifyPlaybackAction.resume;
+  bool get isNext => action == SpotifyPlaybackAction.next;
+  bool get isPrevious => action == SpotifyPlaybackAction.previous;
+}
+
+enum SpotifyPlaybackAction { play, pause, resume, next, previous }
+
+class SpotifyPlayTrackCommand extends AssistantCommand {
+  const SpotifyPlayTrackCommand({required this.query});
+
+  final String query;
+}
+
+class SpotifyPlayArtistCommand extends AssistantCommand {
+  const SpotifyPlayArtistCommand({required this.query});
+
+  final String query;
+}
+
+class SpotifyPlayPlaylistCommand extends AssistantCommand {
+  const SpotifyPlayPlaylistCommand({required this.query});
+
+  final String query;
+}

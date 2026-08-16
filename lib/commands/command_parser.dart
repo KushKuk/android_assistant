@@ -7,12 +7,63 @@ import 'package:voice_assistant/models/bluetooth_device_info.dart';
 class CommandParser {
   const CommandParser();
 
+  // Marker object to indicate that a WhatsApp pattern matched but validation failed
+  static final Object _invalidWhatsAppMarker = Object();
+
   CommandParseResult parse(String input) {
     print('DIAG: CommandParser.parse() entered with input: "$input"');
     final normalizedInput = input.trim();
     if (normalizedInput.isEmpty) {
       print('DIAG: CommandParser.parse() exiting: empty input');
       return const CommandParseResult.unsupported('No command was provided.');
+    }
+
+    // Check if input contains "whatsapp" (case-insensitive) to determine if we should try WhatsApp parsing
+    final lowerInput = normalizedInput.toLowerCase();
+    final containsWhatsApp = lowerInput.contains('whatsapp');
+
+    if (containsWhatsApp) {
+      // Try WhatsApp video call command first (per precedence rules)
+      final whatsappVideoCallResult = _whatsappVideoCallTargetWithValidation(normalizedInput);
+      if (whatsappVideoCallResult == _invalidWhatsAppMarker) {
+        // WhatsApp pattern matched but validation failed - don't fall through to other parsers
+        print('DIAG: CommandParser.parse() exiting: WhatsApp video call pattern matched but validation failed');
+        return const CommandParseResult.unsupported('Invalid WhatsApp video call command.');
+      } else if (whatsappVideoCallResult != null && whatsappVideoCallResult is WhatsAppVideoCallCommand) {
+        final command = whatsappVideoCallResult as WhatsAppVideoCallCommand;
+        print('DIAG: CommandParser.parse() exiting: parsed WhatsAppVideoCallCommand with contact: ${command.contactQuery}');
+        return CommandParseResult.parsed(command);
+      }
+
+      // Try WhatsApp audio call command second
+      final whatsappAudioCallResult = _whatsappAudioCallTargetWithValidation(normalizedInput);
+      if (whatsappAudioCallResult == _invalidWhatsAppMarker) {
+        // WhatsApp pattern matched but validation failed - don't fall through to other parsers
+        print('DIAG: CommandParser.parse() exiting: WhatsApp audio call pattern matched but validation failed');
+        return const CommandParseResult.unsupported('Invalid WhatsApp audio call command.');
+      } else if (whatsappAudioCallResult != null && whatsappAudioCallResult is WhatsAppAudioCallCommand) {
+        final command = whatsappAudioCallResult as WhatsAppAudioCallCommand;
+        print('DIAG: CommandParser.parse() exiting: parsed WhatsAppAudioCallCommand with contact: ${command.contactQuery}');
+        return CommandParseResult.parsed(command);
+      }
+
+      // Try WhatsApp message command third
+      final whatsappMessageResult = _whatsappMessageTargetWithValidation(normalizedInput);
+      if (whatsappMessageResult == _invalidWhatsAppMarker) {
+        // WhatsApp pattern matched but validation failed - don't fall through to other parsers
+        print('DIAG: CommandParser.parse() exiting: WhatsApp message pattern matched but validation failed');
+        return const CommandParseResult.unsupported('Invalid WhatsApp message command.');
+      } else if (whatsappMessageResult != null && whatsappMessageResult is WhatsAppMessageCommand) {
+        final command = whatsappMessageResult as WhatsAppMessageCommand;
+        print('DIAG: CommandParser.parse() exiting: parsed WhatsAppMessageCommand with contact: ${command.contactQuery}, message length: ${command.message.length}');
+        return CommandParseResult.parsed(command);
+      }
+
+      // If we got here, no WhatsApp pattern matched at all (even though input contains "whatsapp")
+      // Fall through to normal parsers
+      print('DIAG: CommandParser.parse() exiting: contains "whatsapp" but no WhatsApp pattern matched, falling through to normal parsers');
+    } else {
+      print('DIAG: CommandParser.parse() exiting: does not contain "whatsapp", using normal parsers');
     }
 
     // Try call command first
@@ -263,13 +314,97 @@ class CommandParser {
   String _trimTerminalPunctuation(String value) =>
       value.trim().replaceFirst(RegExp(r'[.!?]+$'), '').trim();
 
-  static final _callPatterns = <RegExp>[
+  Object? _whatsappVideoCallTargetWithValidation(String input) {
+    // Pattern 1: "whatsapp video call <contact>"
+    final RegExp pattern1 = RegExp(r'^\s*whatsapp\s+video\s+call\s+(.+?)\s*$', caseSensitive: false);
+    // Pattern 2: "video call <contact> on whatsapp"
+    final RegExp pattern2 = RegExp(r'^\s*video\s+call\s+(.*?)\s*on\s+whatsapp\s*$', caseSensitive: false);
+
+    final match1 = pattern1.firstMatch(input);
+    if (match1 != null) {
+      final contactQuery = _trimTerminalPunctuation(match1.group(1)!);
+      if (contactQuery.isEmpty) {
+        return _invalidWhatsAppMarker;
+      }
+      return WhatsAppVideoCallCommand(contactQuery: contactQuery);
+    }
+
+    final match2 = pattern2.firstMatch(input);
+    if (match2 != null) {
+      final contactQuery = _trimTerminalPunctuation(match2.group(1)!);
+      if (contactQuery.isEmpty) {
+        return _invalidWhatsAppMarker;
+      }
+      return WhatsAppVideoCallCommand(contactQuery: contactQuery);
+    }
+
+    return null;
+  }
+
+  Object? _whatsappAudioCallTargetWithValidation(String input) {
+    // Pattern 1: "whatsapp call <contact>"
+    final RegExp pattern1 = RegExp(r'^\s*whatsapp\s+call\s+(.+?)\s*$', caseSensitive: false);
+    // Pattern 2: "call <contact> on whatsapp"
+    final RegExp pattern2 = RegExp(r'^\s*call\s+(.*?)\s*on\s+whatsapp\s*$', caseSensitive: false);
+
+    final match1 = pattern1.firstMatch(input);
+    if (match1 != null) {
+      final contactQuery = _trimTerminalPunctuation(match1.group(1)!);
+      if (contactQuery.isEmpty) {
+        return _invalidWhatsAppMarker;
+      }
+      return WhatsAppAudioCallCommand(contactQuery: contactQuery);
+    }
+
+    final match2 = pattern2.firstMatch(input);
+    if (match2 != null) {
+      final contactQuery = _trimTerminalPunctuation(match2.group(1)!);
+      if (contactQuery.isEmpty) {
+        return _invalidWhatsAppMarker;
+      }
+      return WhatsAppAudioCallCommand(contactQuery: contactQuery);
+    }
+
+    return null;
+  }
+
+  Object? _whatsappMessageTargetWithValidation(String input) {
+    // Pattern 1: "whatsapp <contact> saying <message>"
+    final RegExp pattern1 = RegExp(r'^\s*whatsapp\s+(.+?)\s*saying\s+(.+?)\s*$', caseSensitive: false);
+    // Pattern 2: "send <contact> a whatsapp saying <message>"
+    final RegExp pattern2 = RegExp(r'^\s*send\s+(.+?)\s*a\s+whatsapp\s*saying\s+(.+?)\s*$', caseSensitive: false);
+
+    final match1 = pattern1.firstMatch(input);
+    if (match1 != null) {
+      final contactQuery = _trimTerminalPunctuation(match1.group(1)!);
+      final messageQuery = _trimTerminalPunctuation(match1.group(2)!);
+      if (contactQuery.isEmpty || messageQuery.isEmpty) {
+        return _invalidWhatsAppMarker;
+      }
+      return WhatsAppMessageCommand(contactQuery: contactQuery, message: messageQuery);
+    }
+
+    final match2 = pattern2.firstMatch(input);
+    if (match2 != null) {
+      final contactQuery = _trimTerminalPunctuation(match2.group(1)!);
+      final messageQuery = _trimTerminalPunctuation(match2.group(2)!);
+      if (contactQuery.isEmpty || messageQuery.isEmpty) {
+        return _invalidWhatsAppMarker;
+      }
+      return WhatsAppMessageCommand(contactQuery: contactQuery, message: messageQuery);
+    }
+
+    return null;
+  }
+
+static final _callPatterns = <RegExp>[
     RegExp(r'^\s*(?:call|phone)\s+(.+?)\s*$', caseSensitive: false),
     RegExp(r'^\s*give\s+(.+?)\s+a\s+call\s*$', caseSensitive: false),
+    RegExp(r'^\s*video\s+call\s+(.+?)\s*$', caseSensitive: false),
   ];
 
   static final _callWithoutTarget = RegExp(
-    r'^\s*(?:call|phone)\s*[.!?]?\s*$',
+    r'^\s*(?:call|phone|video\s+call)\s*[.!?]?\s*$',
     caseSensitive: false,
   );
 }

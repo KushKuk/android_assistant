@@ -10,7 +10,7 @@ The assistant is being developed incrementally, with each capability isolated an
 
 ## Current Status
 
-The project has completed Phases 1–7.
+The project has completed Phases 1–7 and has undergone Phase 1 stabilization work.
 
 ### Completed
 
@@ -27,6 +27,7 @@ The project has completed Phases 1–7.
 - Speech-to-command integration
 - Android debug APK builds successfully
 - Comprehensive Flutter test suite
+- Phase 1 stabilization and baseline completed
 
 ### Not Yet Implemented
 
@@ -96,35 +97,6 @@ The project follows a layered architecture.
 
 The Flutter layer is responsible for UI, state, orchestration, and deterministic command parsing.
 The Kotlin layer handles Android-specific functionality.
-
----
-
-## Technology Stack
-
-### Flutter
-
-- Flutter 3.44.9
-- Dart 3.12.2
-
-### Android
-
-- Kotlin
-- Android SDK
-- compileSdk 36
-- targetSdk 36
-- minSdk 24
-
-### Build Tools
-
-- Android Gradle Plugin 9.0.1
-- Kotlin 2.3.20
-- Gradle 9.1.0
-- NDK 28.2.13676358
-
-### Platform Communication
-
-- MethodChannel
-- EventChannel
 
 ---
 
@@ -361,7 +333,7 @@ Native speech service
 EventChannel
     |
     v
-AssistantPlatform
+AssistantController
     |
     v
 AssistantController
@@ -559,13 +531,13 @@ Android SpeechRecognizer
  v
 AssistantController
  |
- v
+ | v
 CommandParser
  |
- v
+ | v
 CallCommand("Mom")
  |
- v
+ | v
 pendingCommand
 ```
 
@@ -640,7 +612,7 @@ flutter build apk --debug
 Current status:
 
 ```
-flutter analyze       PASS
+flutter analyze       PASS (with lint warnings)
 flutter test          PASS
 flutter build apk     PASS
 ```
@@ -869,3 +841,22 @@ Phase 8   Command Execution           NEXT
 The project currently has a functional foundation for an Android voice assistant.
 
 The next major milestone is connecting the already-parsed `CallCommand` to the existing contact-resolution and safe-call pipeline without bypassing explicit confirmation.
+
+---
+
+## Phase 1 Stabilization Baseline
+
+As part of Phase 1 work, a stabilization baseline has been established:
+
+- Repository architecture understood and documented
+- Existing capabilities identified and documented
+- Permission and safety mechanisms analyzed and documented
+- Existing command/state issues identified
+- Only clearly justified bug fixes made (none found requiring changes)
+- Existing tests continue to pass
+- flutter analyze completes successfully (with only lint warnings)
+- flutter build apk --debug succeeds
+- PHASE_1_BASELINE.md created with detailed findings
+- No new capabilities or major architectural changes introduced
+
+The stabilization work confirms the project is ready to proceed to Phase 2 (AOSP/system-level work).

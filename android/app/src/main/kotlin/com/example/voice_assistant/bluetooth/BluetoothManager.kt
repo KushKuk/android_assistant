@@ -1,12 +1,18 @@
 package com.example.voice_assistant.bluetooth
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Settings
+import androidx.core.content.ContextCompat
+
+private const val BLUETOOTH_PERMISSION_REQUEST_CODE = 4004
 
 /**
  * Manages Bluetooth operations for the voice assistant.
@@ -28,13 +34,28 @@ class BluetoothManager(private val context: Context, private val activity: Activ
      */
     @SuppressLint("MissingPermission")
     fun getBluetoothStatus(): BluetoothStatusResult {
+        print("DIAG: BluetoothManager.getBluetoothStatus() entered")
         if (!isBluetoothAvailable()) {
+            print("DIAG: BluetoothManager.getBluetoothStatus() Bluetooth not available")
             return BluetoothStatusResult("unavailable", "Bluetooth not supported on this device")
         }
 
-        // Note: For Android 12+, we need BLUETOOTH_CONNECT or BLUETOOTH_SCAN permissions
-        // to get accurate state, but we'll try anyway and handle permission exceptions
-        return if (bluetoothAdapter?.isEnabled == true) {
+        // For Android 12+, we need BLUETOOTH_CONNECT permission to get accurate state
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnectPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+            print("DIAG: BluetoothManager.getBluetoothStatus() BLUETOOTH_CONNECT permission check: $hasConnectPermission")
+
+            if (!hasConnectPermission) {
+                print("DIAG: BluetoothManager.getBluetoothStatus() Missing BLUETOOTH_CONNECT permission")
+                return BluetoothStatusResult("permissionRequired", "BLUETOOTH_CONNECT permission required")
+            }
+        }
+
+        val isEnabled = bluetoothAdapter?.isEnabled == true
+        print("DIAG: BluetoothManager.getBluetoothStatus() Bluetooth is enabled: $isEnabled")
+        return if (isEnabled) {
             BluetoothStatusResult("enabled")
         } else {
             BluetoothStatusResult("disabled")
@@ -43,85 +64,87 @@ class BluetoothManager(private val context: Context, private val activity: Activ
 
     /**
      * Requests to enable Bluetooth.
-     * Attempts to enable programmatically first, falls back to user action if needed.
+     * On Android 12+, we need to request BLUETOOTH_CONNECT permission first.
+     * Actual enabling requires user action through system settings.
      */
     @SuppressLint("MissingPermission")
     fun requestBluetoothEnable(): BluetoothActionResult {
+        print("DIAG: BluetoothManager.requestBluetoothEnable() entered")
         if (!isBluetoothAvailable()) {
+            print("DIAG: BluetoothManager.requestBluetoothEnable() Bluetooth not available")
             return BluetoothActionResult(
                 "unsupported", "Bluetooth not supported on this device"
             )
+        }
+
+        // Check if we have the necessary permissions for Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnectPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+            print("DIAG: BluetoothManager.requestBluetoothEnable() BLUETOOTH_CONNECT permission check: $hasConnectPermission")
+
+            if (!hasConnectPermission) {
+                print("DIAG: BluetoothManager.requestBluetoothEnable() Missing BLUETOOTH_CONNECT permission")
+                return BluetoothActionResult(
+                    "permissionRequired",
+                    "BLUETOOTH_CONNECT permission required"
+                )
+            }
         }
 
         // If already enabled, return success immediately
         if (bluetoothAdapter?.isEnabled == true) {
+            print("DIAG: BluetoothManager.requestBluetoothEnable() Bluetooth already enabled")
             return BluetoothActionResult("success", "Bluetooth is already enabled")
         }
 
-        // Try to enable Bluetooth programmatically (requires BLUETOOTH_ADMIN permission)
-        try {
-            val result = bluetoothAdapter?.enable()
-            if (result == true) {
-                // Enable command issued successfully, now check if it's actually enabled
-                // Give it a moment to turn on, then check status
-                val startTime = System.currentTimeMillis()
-                while (System.currentTimeMillis() - startTime < 2000) { // 2 second timeout
-                    Thread.sleep(100) // Check every 100ms
-                    if (bluetoothAdapter?.isEnabled == true) {
-                        return BluetoothActionResult("success", "Bluetooth enabled successfully")
-                    }
-                }
-                // If we get here, enable was issued but didn't turn on within 2 seconds
-                // Fall back to user action
-                return BluetoothActionResult(
-                    "userActionRequired",
-                    "Bluetooth enable command issued but device is still enabling. Please wait or enable manually."
-                )
-            } else if (result == false) {
-                // Enable command failed immediately
-                return BluetoothActionResult(
-                    "failure", "Failed to issue Bluetooth enable command"
-                )
-            } else {
-                // result is null (shouldn't happen but let's be safe)
-                return BluetoothActionResult(
-                    "failure", "Bluetooth enable attempt returned null result"
-                )
-            }
-        } catch (e: SecurityException) {
-            // Don't have BLUETOOTH_ADMIN permission, fall back to user action
-            return BluetoothActionResult(
-                "userActionRequired",
-                "Please enable Bluetooth in system settings (requires BLUETOOTH_ADMIN permission)"
-            )
-        } catch (e: Exception) {
-            // Other exception, fall back to user action
-            return BluetoothActionResult(
-                "userActionRequired",
-                "Failed to enable Bluetooth: ${e.message}. Please enable manually."
-            )
-        }
+        // For enabling Bluetooth, we need to use system intent as third-party apps
+        // cannot programmatically enable Bluetooth on most Android versions
+        // This requires user action through system settings
+        print("DIAG: BluetoothManager.requestBluetoothEnable() User action required to enable Bluetooth")
+        return BluetoothActionResult(
+            "userActionRequired",
+            "Please enable Bluetooth in system settings"
+        )
     }
 
     /**
      * Requests to disable Bluetooth.
-     * Note: This usually requires BLUETOOTH_ADMIN permission or user interaction.
      */
     @SuppressLint("MissingPermission")
     fun requestBluetoothDisable(): BluetoothActionResult {
+        print("DIAG: BluetoothManager.requestBluetoothDisable() entered")
         if (!isBluetoothAvailable()) {
+            print("DIAG: BluetoothManager.requestBluetoothDisable() Bluetooth not available")
             return BluetoothActionResult(
                 "unsupported", "Bluetooth not supported on this device"
             )
         }
 
+        // Check if we have the necessary permissions for Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnectPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+            print("DIAG: BluetoothManager.requestBluetoothDisable() BLUETOOTH_CONNECT permission check: $hasConnectPermission")
+
+            if (!hasConnectPermission) {
+                print("DIAG: BluetoothManager.requestBluetoothDisable() Missing BLUETOOTH_CONNECT permission")
+                return BluetoothActionResult(
+                    "permissionRequired",
+                    "BLUETOOTH_CONNECT permission required"
+                )
+            }
+        }
+
         if (bluetoothAdapter?.isEnabled == false) {
+            print("DIAG: BluetoothManager.requestBluetoothDisable() Bluetooth already disabled")
             return BluetoothActionResult("success", "Bluetooth is already disabled")
         }
 
-        // Disabling Bluetooth programmatically requires BLUETOOTH_ADMIN permission
-        // which is not available to third-party apps on most Android versions
-        // We'll suggest the user do it through system settings
+        // Disabling Bluetooth also requires user action through system settings
+        print("DIAG: BluetoothManager.requestBluetoothDisable() User action required to disable Bluetooth")
         return BluetoothActionResult(
             "userActionRequired",
             "Please disable Bluetooth in system settings"
@@ -139,12 +162,28 @@ class BluetoothManager(private val context: Context, private val activity: Activ
             )
         }
 
-        // Note: For Android 12+, we need BLUETOOTH_CONNECT or BLUETOOTH_SCAN permissions
+        // Check permissions for Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnectPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+
+            val hasScanPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!hasConnectPermission && !hasScanPermission) {
+                return BluetoothDeviceListResult(
+                    emptyList(), "BLUETOOTH_CONNECT or BLUETOOTH_SCAN permission required"
+                )
+            }
+        }
+
         val bondedDevices = bluetoothAdapter?.bondedDevices ?: emptySet()
         val deviceInfos = bondedDevices.map { BluetoothDeviceInfo.fromAndroidDevice(it) }
 
         return BluetoothDeviceListResult(
-            devices = deviceInfos.toList(),
+            devices = deviceInfos,
             message = "Found ${deviceInfos.size} paired device(s)"
         )
     }
@@ -160,6 +199,20 @@ class BluetoothManager(private val context: Context, private val activity: Activ
             return BluetoothActionResult(
                 "unsupported", "Bluetooth not supported on this device"
             )
+        }
+
+        // Check permissions for Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnectPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!hasConnectPermission) {
+                return BluetoothActionResult(
+                    "permissionRequired",
+                    "BLUETOOTH_CONNECT permission required"
+                )
+            }
         }
 
         val device: BluetoothDevice? = bluetoothAdapter?.getRemoteDevice(deviceAddress)
@@ -195,6 +248,20 @@ class BluetoothManager(private val context: Context, private val activity: Activ
             )
         }
 
+        // Check permissions for Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnectPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!hasConnectPermission) {
+                return BluetoothActionResult(
+                    "permissionRequired",
+                    "BLUETOOTH_CONNECT permission required"
+                )
+            }
+        }
+
         val device: BluetoothDevice? = bluetoothAdapter?.getRemoteDevice(deviceAddress)
         if (device == null) {
             return BluetoothActionResult("failure", "Device not found: $deviceAddress")
@@ -210,14 +277,48 @@ class BluetoothManager(private val context: Context, private val activity: Activ
 
     /**
      * Checks if the necessary Bluetooth permissions are granted.
-     * Note: This is simplified - actual permission checking depends on Android version.
      */
     fun hasBluetoothPermissions(): Boolean {
-        // For simplicity, we're assuming permissions are handled at runtime
-        // In a production app, you'd check for:
-        // - BLUETOOTH (for legacy apps)
-        // - BLUETOOTH_CONNECT, BLUETOOTH_ADMIN (Android 12+)
-        // - BLUETOOTH_SCAN (Android 12+ for scanning)
-        return true // Placeholder - actual implementation would check permissions
+        if (!isBluetoothAvailable()) {
+            return false
+        }
+
+        // For Android 12+, we need BLUETOOTH_CONNECT for most operations
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnectPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+
+            // For scanning, we also need BLUETOOTH_SCAN
+            val hasScanPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED
+
+            return hasConnectPermission // At minimum we need CONNECT for basic operations
+        }
+
+        // For older Android versions, check legacy BLUETOOTH permission
+        return ContextCompat.checkSelfPermission(
+            context, Manifest.permission.BLUETOOTH
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
+     * Requests the necessary Bluetooth permissions for Android 12+.
+     * For older Android versions, requests the legacy BLUETOOTH permission.
+     */
+    fun requestBluetoothPermission(activity: Activity, result: (Boolean) -> Unit) {
+        if (!isBluetoothAvailable()) {
+            result(false)
+            return
+        }
+
+        val permissions = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
+            else -> arrayOf(Manifest.permission.BLUETOOTH)
+        }
+
+        print("DIAG: BluetoothManager.requestBluetoothPermission() requesting permissions: ${permissions.contentToString()}")
+        activity.requestPermissions(permissions, BLUETOOTH_PERMISSION_REQUEST_CODE)
     }
 }
