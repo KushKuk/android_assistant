@@ -2,13 +2,25 @@ import 'package:voice_assistant/commands/assistant_command.dart';
 import 'package:voice_assistant/commands/command_parse_result.dart';
 import 'package:voice_assistant/models/bluetooth_device_info.dart';
 
+// Marker object to indicate that a WhatsApp pattern matched but validation failed
+final Object _invalidWhatsAppMarker = Object();
+
+// Call patterns moved to top-level to avoid static modifier issues
+final _callPatterns = <RegExp>[
+    RegExp(r'^\s*(?:call|phone)\s+(.+?)\s*$', caseSensitive: false),
+    RegExp(r'^\s*give\s+(.+?)\s+a\s+call\s*$', caseSensitive: false),
+    RegExp(r'^\s*video\s+call\s+(.+?)\s*$', caseSensitive: false),
+  ];
+
+final _callWithoutTarget = RegExp(
+  r'^\s*(?:call|phone|video\s+call)\s*[.!?]?\s*$',
+  caseSensitive: false,
+);
+
 /// Deterministic parsing for supported commands. Execution is intentionally
 /// separate and remains the responsibility of the Android call pipeline.
 class CommandParser {
   const CommandParser();
-
-  // Marker object to indicate that a WhatsApp pattern matched but validation failed
-  static final Object _invalidWhatsAppMarker = Object();
 
   CommandParseResult parse(String input) {
     print('DIAG: CommandParser.parse() entered with input: "$input"');
@@ -107,8 +119,272 @@ class CommandParser {
       return CommandParseResult.parsed(screenshotCommand);
     }
 
+    // Try device settings command
+    final deviceSettingsCommand = _deviceSettingsTarget(normalizedInput);
+    if (deviceSettingsCommand != null) {
+      print('DIAG: CommandParser.parse() exiting: parsed DeviceSettingsCommand with type: ${deviceSettingsCommand.settingsType}, action: ${deviceSettingsCommand.action}');
+      return CommandParseResult.parsed(deviceSettingsCommand);
+    }
+
     print('DIAG: CommandParser.parse() exiting: command not supported');
     return const CommandParseResult.unsupported('Command is not supported.');
+  }
+
+  DeviceSettingsCommand? _deviceSettingsTarget(String input) {
+    print('DIAG: CommandParser._deviceSettingsTarget() entered with input: $input');
+    final lower = input.toLowerCase();
+
+    // Volume commands (media, ring, alarm)
+    if (RegExp(r'^\s*increase\s+volume\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*volume\s+up\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*vol\s+up\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: volume increase');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeMedia, action: DeviceSettingsAction.increase);
+    }
+
+    if (RegExp(r'^\s*decrease\s+volume\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*volume\s+down\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*vol\s+down\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: volume decrease');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeMedia, action: DeviceSettingsAction.decrease);
+    }
+
+    if (RegExp(r'^\s*set\s+volume\s+to\s+(\d+)\s*%\s*$').hasMatch(lower)) {
+      final match = RegExp(r'^\s*set\s+volume\s+to\s+(\d+)\s*%\s*$').firstMatch(lower);
+      if (match != null) {
+        final percentage = int.parse(match.group(1)!);
+        print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: volume set to $percentage%');
+        return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeMedia, action: DeviceSettingsAction.set, value: percentage);
+      }
+    }
+
+    if (RegExp(r'^\s*mute\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: volume mute');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeMedia, action: DeviceSettingsAction.mute);
+    }
+
+    if (RegExp(r'^\s*unmute\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: volume unmute');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeMedia, action: DeviceSettingsAction.unmute);
+    }
+
+    if (RegExp(r'^\s*max\s+volume\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*volume\s+max\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: volume max');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeMedia, action: DeviceSettingsAction.max);
+    }
+
+    if (RegExp(r'^\s*volume\s+status\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*get\s+volume\s+status\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: volume status');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeMedia, action: DeviceSettingsAction.getStatus);
+    }
+
+    // Ring volume commands
+    if (RegExp(r'^\s*increase\s+ring\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: ring volume increase');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeRing, action: DeviceSettingsAction.increase);
+    }
+
+    if (RegExp(r'^\s*decrease\s+ring\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: ring volume decrease');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeRing, action: DeviceSettingsAction.decrease);
+    }
+
+    if (RegExp(r'^\s*set\s+ring\s+volume\s+to\s+(\d+)\s*%\s*$').hasMatch(lower)) {
+      final match = RegExp(r'^\s*set\s+ring\s+volume\s+to\s+(\d+)\s*%\s*$').firstMatch(lower);
+      if (match != null) {
+        final percentage = int.parse(match.group(1)!);
+        print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: ring volume set to $percentage%');
+        return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeRing, action: DeviceSettingsAction.set, value: percentage);
+      }
+    }
+
+    if (RegExp(r'^\s*mute\s+ring\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: ring volume mute');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeRing, action: DeviceSettingsAction.mute);
+    }
+
+    if (RegExp(r'^\s*unmute\s+ring\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: ring volume unmute');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeRing, action: DeviceSettingsAction.unmute);
+    }
+
+    if (RegExp(r'^\s*max\s+ring\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: ring volume max');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeRing, action: DeviceSettingsAction.max);
+    }
+
+    if (RegExp(r'^\s*ring\s+volume\s+status\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: ring volume status');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeRing, action: DeviceSettingsAction.getStatus);
+    }
+
+    // Alarm volume commands
+    if (RegExp(r'^\s*increase\s+alarm\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: alarm volume increase');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeAlarm, action: DeviceSettingsAction.increase);
+    }
+
+    if (RegExp(r'^\s*decrease\s+alarm\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: alarm volume decrease');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeAlarm, action: DeviceSettingsAction.decrease);
+    }
+
+    if (RegExp(r'^\s*set\s+alarm\s+volume\s+to\s+(\d+)\s*%\s*$').hasMatch(lower)) {
+      final match = RegExp(r'^\s*set\s+alarm\s+volume\s+to\s+(\d+)\s*%\s*$').firstMatch(lower);
+      if (match != null) {
+        final percentage = int.parse(match.group(1)!);
+        print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: alarm volume set to $percentage%');
+        return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeAlarm, action: DeviceSettingsAction.set, value: percentage);
+      }
+    }
+
+    if (RegExp(r'^\s*mute\s+alarm\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: alarm volume mute');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeAlarm, action: DeviceSettingsAction.mute);
+    }
+
+    if (RegExp(r'^\s*unmute\s+alarm\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: alarm volume unmute');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeAlarm, action: DeviceSettingsAction.unmute);
+    }
+
+    if (RegExp(r'^\s*max\s+alarm\s+volume\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: alarm volume max');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeAlarm, action: DeviceSettingsAction.max);
+    }
+
+    if (RegExp(r'^\s*alarm\s+volume\s+status\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: alarm volume status');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.volumeAlarm, action: DeviceSettingsAction.getStatus);
+    }
+
+    // Brightness commands
+    if (RegExp(r'^\s*increase\s+brightness\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*brightness\s+up\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: brightness increase');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.brightness, action: DeviceSettingsAction.increase);
+    }
+
+    if (RegExp(r'^\s*decrease\s+brightness\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*brightness\s+down\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: brightness decrease');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.brightness, action: DeviceSettingsAction.decrease);
+    }
+
+    if (RegExp(r'^\s*set\s+brightness\s+to\s+(\d+)\s*%\s*$').hasMatch(lower)) {
+      final match = RegExp(r'^\s*set\s+brightness\s+to\s+(\d+)\s*%\s*$').firstMatch(lower);
+      if (match != null) {
+        final percentage = int.parse(match.group(1)!);
+        print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: brightness set to $percentage%');
+        return DeviceSettingsCommand(settingsType: DeviceSettingsType.brightness, action: DeviceSettingsAction.set, value: percentage);
+      }
+    }
+
+    if (RegExp(r'^\s*max\s+brightness\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*brightness\s+max\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: brightness max');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.brightness, action: DeviceSettingsAction.max);
+    }
+
+    if (RegExp(r'^\s*min\s+brightness\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*brightness\s+min\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: brightness min');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.brightness, action: DeviceSettingsAction.min);
+    }
+
+    if (RegExp(r'^\s*brightness\s+status\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*get\s+brightness\s+status\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: brightness status');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.brightness, action: DeviceSettingsAction.getStatus);
+    }
+
+    // Flashlight commands
+    if (RegExp(r'^\s*turn\s+on\s+flashlight\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*enable\s+flashlight\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*flashlight\s+on\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*switch\s+on\s+flashlight\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: flashlight on');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.flashlight, action: DeviceSettingsAction.set, value: true);
+    }
+
+    if (RegExp(r'^\s*turn\s+off\s+flashlight\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*disable\s+flashlight\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*flashlight\s+off\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*switch\s+off\s+flashlight\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: flashlight off');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.flashlight, action: DeviceSettingsAction.set, value: false);
+    }
+
+    if (RegExp(r'^\s*toggle\s+flashlight\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: flashlight toggle');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.flashlight, action: DeviceSettingsAction.toggle);
+    }
+
+    if (RegExp(r'^\s*flashlight\s+status\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*get\s+flashlight\s+status\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: flashlight status');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.flashlight, action: DeviceSettingsAction.getStatus);
+    }
+
+    // Ringer mode commands
+    if (RegExp(r'^\s*turn\s+on\s+silent\s+mode\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*enable\s+silent\s+mode\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*silent\s+mode\s+on\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: silent mode on');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.ringerMode, action: DeviceSettingsAction.set, value: "SILENT");
+    }
+
+    if (RegExp(r'^\s*turn\s+on\s+vibrate\s+mode\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*enable\s+vibrate\s+mode\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*vibrate\s+mode\s+on\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: vibrate mode on');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.ringerMode, action: DeviceSettingsAction.set, value: "VIBRATE");
+    }
+
+    if (RegExp(r'^\s*turn\s+on\s+normal\s+mode\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*enable\s+normal\s+mode\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*normal\s+mode\s+on\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: normal mode on');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.ringerMode, action: DeviceSettingsAction.set, value: "NORMAL");
+    }
+
+    if (RegExp(r'^\s*ringer\s+mode\s+status\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*get\s+ringer\s+mode\s+status\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: ringer mode status');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.ringerMode, action: DeviceSettingsAction.getStatus);
+    }
+
+    // Do Not Disturb commands
+    if (RegExp(r'^\s*turn\s+on\s+do\s+not\s+disturb\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*enable\s+do\s+not\s+disturb\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*do\s+not\s+disturb\s+on\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*turn\s+on\s+dnd\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*enable\s+dnd\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*dnd\s+on\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: DND on');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.dnd, action: DeviceSettingsAction.set, value: true);
+    }
+
+    if (RegExp(r'^\s*turn\s+off\s+do\s+not\s+disturb\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*disable\s+do\s+not\s+disturb\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*do\s+not\s+disturb\s+off\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*turn\s+off\s+dnd\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*disable\s+dnd\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*dnd\s+off\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: DND off');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.dnd, action: DeviceSettingsAction.set, value: false);
+    }
+
+    if (RegExp(r'^\s*dnd\s+status\s*$').hasMatch(lower) ||
+        RegExp(r'^\s*get\s+dnd\s+status\s*$').hasMatch(lower)) {
+      print('DIAG: CommandParser._deviceSettingsTarget() exiting with match: DND status');
+      return DeviceSettingsCommand(settingsType: DeviceSettingsType.dnd, action: DeviceSettingsAction.getStatus);
+    }
+
+    print('DIAG: CommandParser._deviceSettingsTarget() exiting: no match');
+    return null;
   }
 
   ConnectivityCommand? _connectivityTarget(String input) {
@@ -376,35 +652,24 @@ class CommandParser {
 
     final match1 = pattern1.firstMatch(input);
     if (match1 != null) {
-      final contactQuery = _trimTerminalPunctuation(match1.group(1)!);
-      final messageQuery = _trimTerminalPunctuation(match1.group(2)!);
-      if (contactQuery.isEmpty || messageQuery.isEmpty) {
-        return _invalidWhatsAppMarker;
-      }
-      return WhatsAppMessageCommand(contactQuery: contactQuery, message: messageQuery);
+        final contactQuery = _trimTerminalPunctuation(match1.group(1)!);
+        final messageQuery = _trimTerminalPunctuation(match1.group(2)!);
+        if (contactQuery.isEmpty || messageQuery.isEmpty) {
+          return _invalidWhatsAppMarker;
+        }
+        return WhatsAppMessageCommand(contactQuery: contactQuery, message: messageQuery);
     }
 
     final match2 = pattern2.firstMatch(input);
     if (match2 != null) {
-      final contactQuery = _trimTerminalPunctuation(match2.group(1)!);
-      final messageQuery = _trimTerminalPunctuation(match2.group(2)!);
-      if (contactQuery.isEmpty || messageQuery.isEmpty) {
-        return _invalidWhatsAppMarker;
-      }
-      return WhatsAppMessageCommand(contactQuery: contactQuery, message: messageQuery);
+        final contactQuery = _trimTerminalPunctuation(match2.group(1)!);
+        final messageQuery = _trimTerminalPunctuation(match2.group(2)!);
+        if (contactQuery.isEmpty || messageQuery.isEmpty) {
+          return _invalidWhatsAppMarker;
+        }
+        return WhatsAppMessageCommand(contactQuery: contactQuery, message: messageQuery);
     }
 
     return null;
   }
-
-static final _callPatterns = <RegExp>[
-    RegExp(r'^\s*(?:call|phone)\s+(.+?)\s*$', caseSensitive: false),
-    RegExp(r'^\s*give\s+(.+?)\s+a\s+call\s*$', caseSensitive: false),
-    RegExp(r'^\s*video\s+call\s+(.+?)\s*$', caseSensitive: false),
-  ];
-
-  static final _callWithoutTarget = RegExp(
-    r'^\s*(?:call|phone|video\s+call)\s*[.!?]?\s*$',
-    caseSensitive: false,
-  );
 }

@@ -226,7 +226,43 @@ class MockAssistantPlatform implements AssistantPlatform {
   Future<bool> isSpotifyInstalled() async => true;
 
   @override
+  Future<String?> executeSystemOperation(String operation, String action, {Map<String, dynamic>? args}) async {
+    // Return a successful test operation result for the system.test operation
+    if (operation == 'system.test' && action == 'get') {
+      return '''
+      {
+        "status": "SUCCESS",
+        "operation": "system.test",
+        "message": "System test successful",
+        "silent": true,
+        "requiresUserAction": false
+      }
+      ''';
+    }
+    // For unknown operations, return unsupported
+    return '''
+    {
+      "status": "UNSUPPORTED",
+      "operation": "$operation",
+      "message": "Operation not supported",
+      "silent": true,
+      "requiresUserAction": false
+    }
+    ''';
+  }
+
+  @override
   Future<void> openSpotify() async {}
+
+  // System Service methods (Binder IPC)
+  @override
+  Future<bool> pingSystemService() async => true;
+
+  @override
+  Future<String?> getSystemServiceVersion() async => '1.0.0-prototype';
+
+  @override
+  Future<String?> getSystemServiceStatus() async => 'OK';
 
   @override
   Future<void> playSpotify() async {}

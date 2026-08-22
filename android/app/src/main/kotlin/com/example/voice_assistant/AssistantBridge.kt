@@ -16,6 +16,7 @@ import com.example.voice_assistant.calls.CallRequest
 import com.example.voice_assistant.calls.SafeCallPipeline
 import com.example.voice_assistant.connectivity.ConnectivityManager
 import com.example.voice_assistant.contacts.ContactResolver
+import com.example.voice_assistant.system.binder.JarvisSystemServiceClient
 import com.example.voice_assistant.speech.AssistantSpeechRecognizer
 import com.example.voice_assistant.speech.AssistantTextToSpeech
 import io.flutter.plugin.common.BinaryMessenger
@@ -42,10 +43,19 @@ class AssistantBridge(
     private var pendingCallPermissionResult: MethodChannel.Result? = null
     private var pendingMicrophonePermissionResult: MethodChannel.Result? = null
     private var pendingBluetoothPermissionResult: MethodChannel.Result? = null
+    private val systemServiceClient by lazy { JarvisSystemServiceClient.getInstance(activity.applicationContext) }
 
     fun register() {
         methodChannel.setMethodCallHandler(this)
         eventChannel.setStreamHandler(this)
+    }
+
+    fun bindToSystemService() {
+        systemServiceClient.bind()
+    }
+
+    fun unbindFromSystemService() {
+        systemServiceClient.unbind()
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -179,6 +189,28 @@ class AssistantBridge(
                 searchAndPlayPlaylist(query)
                 result.success(null)
             }
+
+            // System Service methods (Binder IPC)
+            "jarvis_system_ping" -> result.success(systemServiceClient.ping())
+            "jarvis_system_version" -> result.success(systemServiceClient.getServiceVersion())
+            "jarvis_system_status" -> result.success(systemServiceClient.getSystemStatus())
+            "jarvis_system_execute_operation" -> {
+                val arguments = call.arguments as? Map<*, *> ?: run {
+                    result.error("invalid_arguments", "Operation arguments are required.", null)
+                    return
+                }
+                val operation = arguments["operation"] as? String
+                val action = arguments["action"] as? String
+                val argsMap = arguments["args"] as? Map<*, *>
+                // Convert argsMap to JSON string for the Binder call
+                val argsJson = argsMap?.toString() ?: "{}"
+                if (operation.isNullOrBlank() || action.isNullOrBlank()) {
+                    result.error("invalid_arguments", "Operation and action are required.", null)
+                    return
+                }
+                result.success(systemServiceClient.executeSystemOperation(operation, action, argsJson))
+            }
+
             else -> result.notImplemented()
         }
     }
@@ -609,7 +641,7 @@ class AssistantBridge(
     private fun setWifiEnabled(enabled: Boolean): Map<String, Any> {
         Log.d("AssistantBridge", "setWifiEnabled() entered with enabled: $enabled")
         val result = connectivityManager.setWifiEnabled(enabled).toMap()
-        Log.d("AssistantBridge", "setWifiEnabled() returning: $result")
+        Log.d("AssistantBridge", "setWifeEnabled() returning: $result")
         return result
     }
 

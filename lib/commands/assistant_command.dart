@@ -135,3 +135,48 @@ class SpotifyPlayPlaylistCommand extends AssistantCommand {
 
   final String query;
 }
+
+// ADD DEVICE SETTINGS COMMANDS
+class DeviceSettingsCommand extends AssistantCommand {
+  const DeviceSettingsCommand({
+    required this.settingsType,
+    required this.action,
+    this.value,
+  });
+
+  final DeviceSettingsType settingsType;
+  final DeviceSettingsAction action;
+  final dynamic value; // Can be int (percentage), String (mode), or bool (enabled/disabled)
+
+  bool get isGetStatus => action == DeviceSettingsAction.getStatus;
+  bool get isSet => action == DeviceSettingsAction.set;
+  bool get isIncrease => action == DeviceSettingsAction.increase;
+  bool get isDecrease => action == DeviceSettingsAction.decrease;
+  bool get isMute => action == DeviceSettingsAction.mute;
+  bool get isUnmute => action == DeviceSettingsAction.unmute;
+  bool get isMax => action == DeviceSettingsAction.max;
+  bool get isMin => action == DeviceSettingsAction.min;
+  bool get isToggle => action == DeviceSettingsAction.toggle;
+}
+
+enum DeviceSettingsType {
+  volumeMedia,
+  volumeRing,
+  volumeAlarm,
+  brightness,
+  flashlight,
+  ringerMode,
+  dnd
+}
+
+enum DeviceSettingsAction {
+  getStatus,
+  set,
+  increase,
+  decrease,
+  mute,
+  unmute,
+  max,
+  min,
+  toggle
+}

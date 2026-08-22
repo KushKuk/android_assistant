@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:voice_assistant/capabilities/bluetooth_capability.dart';
 import 'package:voice_assistant/capabilities/call_capability.dart';
 import 'package:voice_assistant/capabilities/connectivity_capability.dart';
+import 'package:voice_assistant/capabilities/device_settings_capability.dart';
 import 'package:voice_assistant/capabilities/flashlight_capability.dart';
 import 'package:voice_assistant/capabilities/screenshot_capability.dart';
 import 'package:voice_assistant/capabilities/whatsapp_capability.dart';
@@ -57,6 +58,7 @@ class AssistantController extends ChangeNotifier {
         FlashlightCapability(platform),
         ScreenshotCapability(platform),
         WhatsAppCapability(platform),
+        DeviceSettingsCapability(platform),
     ]);
   }
 

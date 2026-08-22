@@ -10,9 +10,13 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         assistantBridge = AssistantBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         assistantBridge.register()
+        // Bind to the system service for Binder IPC prototype
+        assistantBridge.bindToSystemService()
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        // Unbind from the system service
+        assistantBridge.unbindFromSystemService()
         assistantBridge.dispose()
         super.cleanUpFlutterEngine(flutterEngine)
     }

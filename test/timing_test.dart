@@ -34,6 +34,11 @@ class MockAssistantPlatform implements AssistantPlatform {
   bool hasContactPermission = true;
   bool requestContactPermissionResult = true;
 
+  // System Service methods
+  bool pingSystemServiceValue = true;
+  String? systemServiceVersion = "1.0.0-prototype";
+  String? systemServiceStatus = "OK";
+
   @override
   Stream<Map<Object?, Object?>> get events => _eventController.stream;
 
@@ -218,6 +223,42 @@ class MockAssistantPlatform implements AssistantPlatform {
 
   @override
   Future<void> openSpotify() async {}
+
+  // System Service methods
+  @override
+  Future<bool> pingSystemService() async => pingSystemServiceValue;
+
+  @override
+  Future<String?> getSystemServiceVersion() async => systemServiceVersion;
+
+  @override
+  Future<String?> getSystemServiceStatus() async => systemServiceStatus;
+
+  @override
+  Future<String?> executeSystemOperation(String operation, String action, {Map<String, dynamic>? args}) async {
+    // Return a successful test operation result for the system.test operation
+    if (operation == 'system.test' && action == 'get') {
+      return '''
+      {
+        "status": "SUCCESS",
+        "operation": "system.test",
+        "message": "System test successful",
+        "silent": true,
+        "requiresUserAction": false
+      }
+      ''';
+    }
+    // For unknown operations, return unsupported
+    return '''
+    {
+      "status": "UNSUPPORTED",
+      "operation": "$operation",
+      "message": "Operation not supported",
+      "silent": true,
+      "requiresUserAction": false
+    }
+    ''';
+  }
 
   @override
   Future<void> playSpotify() async {}

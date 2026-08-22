@@ -1,0 +1,45 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
+android {
+    compileSdk = flutter.compileSdkVersion
+
+    defaultConfig {
+        applicationId = "com.example.voice_assistant"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.debug
+        }
+    }
+
+    // Configure source sets for AIDL
+    sourceSets {
+        getByName("main") {
+            java {
+                srcDir("src/main/java")
+                srcDir("src/main/kotlin")
+                srcDir("build/generated/source/aidl/debug")
+            }
+            aidl {
+                srcDir("src/main/aidl")
+            }
+        }
+    }
+}
+
+kotlin {
+    jvmTarget = "17"
+}
+
+flutter {
+    source = "../.."
+}

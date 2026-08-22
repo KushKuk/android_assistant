@@ -1,12 +1,12 @@
 import 'package:voice_assistant/capabilities/assistant_capability.dart';
 import 'package:voice_assistant/commands/assistant_command.dart';
 import 'package:voice_assistant/models/execution_result.dart';
-import 'package:flutter/services.dart';
 import 'package:voice_assistant/services/assistant_platform.dart';
 import 'package:voice_assistant/models/wifi_result.dart';
 import 'package:voice_assistant/models/mobile_data_result.dart';
 import 'package:voice_assistant/models/hotspot_result.dart';
 import 'package:voice_assistant/models/settings_result.dart';
+import 'dart:convert';
 
 /// Capability for handling ConnectivityCommand execution.
 ///
@@ -19,48 +19,123 @@ class ConnectivityCapability implements AssistantCapability {
 
   @override
   bool canHandle(AssistantCommand command) {
-    print('DIAG: ConnectivityCapability.canHandle() called with command: $command');
-    final result = command is ConnectivityCommand;
-    print('DIAG: ConnectivityCapability.canHandle() returning: $result');
-    return result;
+    return command is ConnectivityCommand;
   }
 
   @override
   Future<ExecutionResult> execute(AssistantCommand command) async {
-    print('DIAG: ConnectivityCapability.execute() called with command: $command');
     if (!canHandle(command)) {
-      print('DIAG: ConnectivityCapability cannot handle command: $command');
       return ExecutionResult.invalidArguments(
           'ConnectivityCapability can only handle ConnectivityCommand');
     }
 
     final connectivityCommand = command as ConnectivityCommand;
-    print('DIAG: ConnectivityCapability about to execute _executeConnectivityCommand');
-    final result = await _executeConnectivityCommand(connectivityCommand);
-    print('DIAG: ConnectivityCapability._executeConnectivityCommand returned: $result');
-    return result;
+    return await _executeConnectivityCommand(connectivityCommand);
   }
 
   Future<ExecutionResult> _executeConnectivityCommand(
       ConnectivityCommand command) async {
     print('DIAG: ConnectivityCapability._executeConnectivityCommand() entered with command: $command');
     try {
-      if (command.isGetStatus) {
-        print('DIAG: ConnectivityCapability handling getStatus for ${command.type}');
-        return await _handleGetStatus(command.type);
-      } else if (command.isEnable) {
-        print('DIAG: ConnectivityCapability handling enable for ${command.type}');
-        return await _handleEnable(command.type);
-      } else if (command.isDisable) {
-        print('DIAG: ConnectivityCapability handling disable for ${command.type}');
-        return await _handleDisable(command.type);
-      } else if (command.isOpenSettings) {
-        print('DIAG: ConnectivityCapability handling openSettings for ${command.type}');
-        return await _handleOpenSettings(command.type);
+      String operation = '';
+      String action = '';
+
+      // Map connectivity command to system operation
+      if (command.type == ConnectivityType.wifi) {
+        if (command.isGetStatus) {
+          operation = "wifi.status";
+          action = "get";
+        } else if (command.isEnable) {
+          operation = "wifi.enable";
+          action = "set";
+        } else if (command.isDisable) {
+          operation = "wifi.disable";
+          action = "set";
+        } else if (command.isOpenSettings) {
+          // For opening settings, we'll keep using the existing platform method
+          // as it's simpler and doesn't require Binder complexity for this use case
+          print('DIAG: ConnectivityCapability handling openSettings for ${command.type}');
+          return await _handleOpenSettings(command.type);
+        }
+      } else if (command.type == ConnectivityType.mobileData) {
+        if (command.isGetStatus) {
+          operation = "mobiledata.status";
+          action = "get";
+        } else if (command.isEnable) {
+          operation = "mobiledata.enable";
+          action = "set";
+        } else if (command.isDisable) {
+          operation = "mobiledata.disable";
+          action = "set";
+        } else if (command.isOpenSettings) {
+          // For opening settings, we'll keep using the existing platform method
+          print('DIAG: ConnectivityCapability handling openSettings for ${command.type}');
+          return await _handleOpenSettings(command.type);
+        }
+      } else if (command.type == ConnectivityType.hotspot) {
+        if (command.isGetStatus) {
+          operation = "hotspot.status";
+          action = "get";
+        } else if (command.isEnable) {
+          operation = "hotspot.enable";
+          action = "set";
+        } else if (command.isDisable) {
+          operation = "hotspot.disable";
+          action = "set";
+        } else if (command.isOpenSettings) {
+          // For opening settings, we'll keep using the existing platform method
+          print('DIAG: ConnectivityCapability handling openSettings for ${command.type}');
+          return await _handleOpenSettings(command.type);
+        }
       } else {
-        print('DIAG: ConnectivityCapability unsupported action: ${command.action}');
+        print('DIAG: ConnectivityCapability unsupported connectivity type: ${command.type}');
         return ExecutionResult.unsupported(
-            'Unsupported Connectivity action: ${command.action}');
+            'Unsupported Connectivity type: ${command.type}');
+      }
+
+      // Execute the operation through Binder IPC
+      print('DIAG: ConnectivityCapability executing system operation: $operation, action: $action');
+      final resultJson = await _platform.executeSystemOperation(
+        operation,
+        action,
+        args: {}, // No additional args needed for these operations
+      );
+
+      if (resultJson == null) {
+        return ExecutionResult.failure('System operation returned null result');
+      }
+
+      // Parse the JSON result and convert to appropriate ExecutionResult
+      try {
+        final resultMap = jsonDecode(resultJson) as Map<String, dynamic>;
+        final status = resultMap['status'] as String?;
+        final message = resultMap['message'] as String?;
+        final requiresUserAction = resultMap['requiresUserAction'] as bool? ?? false;
+        final silent = resultMap['silent'] as bool? ?? true;
+
+        // Convert based on operation type and status
+        switch (operation) {
+          case "wifi.status":
+            return _convertWifiStatusResultFromSystem(resultMap);
+          case "wifi.enable":
+          case "wifi.disable":
+            return _convertWifiActionResultFromSystem(resultMap);
+          case "mobiledata.status":
+            return _convertMobileDataStatusResultFromSystem(resultMap);
+          case "mobiledata.enable":
+          case "mobiledata.disable":
+            return _convertMobileDataActionResultFromSystem(resultMap);
+          case "hotspot.status":
+            return _convertHotspotStatusResultFromSystem(resultMap);
+          case "hotspot.enable":
+          case "hotspot.disable":
+            return _convertHotspotActionResultFromSystem(resultMap);
+          default:
+            return ExecutionResult.failure('Unknown operation: $operation');
+        }
+      } catch (e) {
+        print('DIAG: ConnectivityCapability failed to parse system operation result: $e');
+        return ExecutionResult.failure('Failed to parse system operation result: $e');
       }
     } catch (e) {
       print('DIAG: ConnectivityCapability._executeConnectivityCommand caught exception: $e');
@@ -303,6 +378,257 @@ class ConnectivityCapability implements AssistantCapability {
       print('DIAG: ConnectivityCapability._convertSettingsResult returning failure');
       return ExecutionResult.failure(
           result.message ?? 'Failed to open settings');
+    }
+  }
+
+  // Conversion methods for system operation results
+  ExecutionResult _convertWifiStatusResultFromSystem(Map<String, dynamic> resultMap) {
+    print('DIAG: ConnectivityCapability._convertWifiStatusResultFromSystem() entered with result: $resultMap');
+    final status = resultMap['status'] as String;
+    final message = resultMap['message'] as String?;
+
+    WifiStatus wifiStatus;
+    switch (status.toLowerCase()) {
+      case 'enabled':
+        wifiStatus = WifiStatus.enabled;
+        break;
+      case 'disabled':
+        wifiStatus = WifiStatus.disabled;
+        break;
+      case 'unavailable':
+        wifiStatus = WifiStatus.unavailable;
+        break;
+      case 'permissionrequired':
+        wifiStatus = WifiStatus.permissionRequired;
+        break;
+      default:
+        wifiStatus = WifiStatus.unavailable;
+    }
+
+    final result = WifiStatusResult(
+      status: wifiStatus,
+      message: message,
+    );
+
+    // Determine if this requires user action or is an error
+    if (status.toLowerCase() == 'permissionrequired') {
+      print('DIAG: ConnectivityCapability._convertWifiStatusResultFromSystem returning permissionRequired');
+      return ExecutionResult.permissionRequired(message ?? 'Wi-Fi permission required');
+    } else if (status.toLowerCase() == 'unavailable' || status.toLowerCase() == 'failed') {
+      print('DIAG: ConnectivityCapability._convertWifiStatusResultFromSystem returning unavailable/failed');
+      return ExecutionResult.unavailable(message ?? 'Wi-Fi unavailable');
+    } else {
+      print('DIAG: ConnectivityCapability._convertWifiStatusResultFromSystem returning success');
+      return ExecutionResult.success(data: result);
+    }
+  }
+
+  ExecutionResult _convertWifiActionResultFromSystem(Map<String, dynamic> resultMap) {
+    print('DIAG: ConnectivityCapability._convertWifiActionResultFromSystem() entered with result: $resultMap');
+    final status = resultMap['status'] as String;
+    final message = resultMap['message'] as String?;
+
+    switch (status.toLowerCase()) {
+      case 'success':
+        print('DIAG: ConnectivityCapability._convertWifiActionResultFromSystem returning success');
+        final result = WifiActionResult(
+          status: WifiActionStatus.success,
+          message: message,
+        );
+        return ExecutionResult.success(data: result);
+      case 'failure':
+        print('DIAG: ConnectivityCapability._convertWifiActionResultFromSystem returning failure');
+        return ExecutionResult.failure(message ?? 'Wi-Fi action failed');
+      case 'permissionrequired':
+        print('DIAG: ConnectivityCapability._convertWifiActionResultFromSystem returning permissionRequired');
+        return ExecutionResult.permissionRequired(message ?? 'Wi-Fi permission required');
+      case 'useractionrequired':
+        print('DIAG: ConnectivityCapability._convertWifiActionResultFromSystem returning userActionRequired');
+        final result = WifiActionResult(
+          status: WifiActionStatus.userActionRequired,
+          message: message,
+        );
+        return ExecutionResult.userActionRequired(
+          message ?? 'User action required for Wi-Fi',
+          data: result,
+        );
+      case 'unsupported':
+        print('DIAG: ConnectivityCapability._convertWifiActionResultFromSystem returning unsupported');
+        return ExecutionResult.unsupported(message ?? 'Wi-Fi not supported on this platform');
+      default:
+        print('DIAG: ConnectivityCapability._convertWifiActionResultFromSystem returning failure for unknown status: $status');
+        return ExecutionResult.failure('Unknown Wi-Fi action status: $status');
+    }
+  }
+
+  ExecutionResult _convertMobileDataStatusResultFromSystem(Map<String, dynamic> resultMap) {
+    print('DIAG: ConnectivityCapability._convertMobileDataStatusResultFromSystem() entered with result: $resultMap');
+    final status = resultMap['status'] as String;
+    final message = resultMap['message'] as String?;
+
+    MobileDataStatus mobileDataStatus;
+    switch (status.toLowerCase()) {
+      case 'enabled':
+        mobileDataStatus = MobileDataStatus.enabled;
+        break;
+      case 'disabled':
+        mobileDataStatus = MobileDataStatus.disabled;
+        break;
+      case 'unavailable':
+        mobileDataStatus = MobileDataStatus.unavailable;
+        break;
+      case 'permissionrequired':
+        mobileDataStatus = MobileDataStatus.permissionRequired;
+        break;
+      default:
+        mobileDataStatus = MobileDataStatus.unavailable;
+    }
+
+    final result = MobileDataStatusResult(
+      status: mobileDataStatus,
+      message: message,
+    );
+
+    // Determine if this requires user action or is an error
+    if (status.toLowerCase() == 'permissionrequired') {
+      print('DIAG: ConnectivityCapability._convertMobileDataStatusResultFromSystem returning permissionRequired');
+      return ExecutionResult.permissionRequired(message ?? 'Mobile data permission required');
+    } else if (status.toLowerCase() == 'unavailable' || status.toLowerCase() == 'failed') {
+      print('DIAG: ConnectivityCapability._convertMobileDataStatusResultFromSystem returning unavailable/failed');
+      return ExecutionResult.unavailable(message ?? 'Mobile data unavailable');
+    } else {
+      print('DIAG: ConnectivityCapability._convertMobileDataStatusResultFromSystem returning success');
+      return ExecutionResult.success(data: result);
+    }
+  }
+
+  ExecutionResult _convertMobileDataActionResultFromSystem(Map<String, dynamic> resultMap) {
+    print('DIAG: ConnectivityCapability._convertMobileDataActionResultFromSystem() entered with result: $resultMap');
+    final status = resultMap['status'] as String;
+    final message = resultMap['message'] as String?;
+
+    switch (status.toLowerCase()) {
+      case 'success':
+        print('DIAG: ConnectivityCapability._convertMobileDataActionResultFromSystem returning success');
+        final result = MobileDataActionResult(
+          status: MobileDataActionStatus.success,
+          message: message,
+        );
+        return ExecutionResult.success(data: result);
+      case 'failure':
+        print('DIAG: ConnectivityCapability._convertMobileDataActionResultFromSystem returning failure');
+        return ExecutionResult.failure(message ?? 'Mobile data action failed');
+      case 'permissionrequired':
+        print('DIAG: ConnectivityCapability._convertMobileDataActionResultFromSystem returning permissionRequired');
+        return ExecutionResult.permissionRequired(message ?? 'Mobile data permission required');
+      case 'useractionrequired':
+        print('DIAG: ConnectivityCapability._convertMobileDataActionResultFromSystem returning userActionRequired');
+        final result = MobileDataActionResult(
+          status: MobileDataActionStatus.userActionRequired,
+          message: message,
+        );
+        return ExecutionResult.userActionRequired(
+          message ?? 'User action required for mobile data',
+          data: result,
+        );
+      case 'unsupported':
+        print('DIAG: ConnectivityCapability._convertMobileDataActionResultFromSystem returning unsupported');
+        return ExecutionResult.unsupported(message ?? 'Mobile data control not supported on this platform');
+      default:
+        print('DIAG: ConnectivityCapability._convertMobileDataActionResultFromSystem returning failure for unknown status: $status');
+        return ExecutionResult.failure('Unknown mobile data action status: $status');
+    }
+  }
+
+  ExecutionResult _convertHotspotStatusResultFromSystem(Map<String, dynamic> resultMap) {
+    print('DIAG: ConnectivityCapability._convertHotspotStatusResultFromSystem() entered with result: $resultMap');
+    final status = resultMap['status'] as String;
+    final message = resultMap['message'] as String?;
+
+    HotspotStatus hotspotStatus;
+    switch (status.toLowerCase()) {
+      case 'enabled':
+        hotspotStatus = HotspotStatus.enabled;
+        break;
+      case 'disabled':
+        hotspotStatus = HotspotStatus.disabled;
+        break;
+      case 'unavailable':
+        hotspotStatus = HotspotStatus.unavailable;
+        break;
+      case 'permissionrequired':
+        hotspotStatus = HotspotStatus.permissionRequired;
+        break;
+      case 'configurerequired':
+        hotspotStatus = HotspotStatus.configureRequired;
+        break;
+      default:
+        hotspotStatus = HotspotStatus.unavailable;
+    }
+
+    final result = HotspotStatusResult(
+      status: hotspotStatus,
+      message: message,
+    );
+
+    // Determine if this requires user action or is an error
+    if (status.toLowerCase() == 'permissionrequired') {
+      print('DIAG: ConnectivityCapability._convertHotspotStatusResultFromSystem returning permissionRequired');
+      return ExecutionResult.permissionRequired(message ?? 'Hotspot permission required');
+    } else if (status.toLowerCase() == 'unavailable' || status.toLowerCase() == 'failed') {
+      print('DIAG: ConnectivityCapability._convertHotspotStatusResultFromSystem returning unavailable/failed');
+      return ExecutionResult.unavailable(message ?? 'Hotspot unavailable');
+    } else if (status.toLowerCase() == 'configurerequired') {
+      print('DIAG: ConnectivityCapability._convertHotspotStatusResultFromSystem returning userActionRequired for configureRequired');
+      final result = HotspotStatusResult(
+        status: HotspotStatus.configureRequired,
+        message: message,
+      );
+      return ExecutionResult.userActionRequired(
+        message ?? 'Hotspot requires configuration - user action required',
+        data: result,
+      );
+    } else {
+      print('DIAG: ConnectivityCapability._convertHotspotStatusResultFromSystem returning success');
+      return ExecutionResult.success(data: result);
+    }
+  }
+
+  ExecutionResult _convertHotspotActionResultFromSystem(Map<String, dynamic> resultMap) {
+    print('DIAG: ConnectivityCapability._convertHotspotActionResultFromSystem() entered with result: $resultMap');
+    final status = resultMap['status'] as String;
+    final message = resultMap['message'] as String?;
+
+    switch (status.toLowerCase()) {
+      case 'success':
+        print('DIAG: ConnectivityCapability._convertHotspotActionResultFromSystem returning success');
+        final result = HotspotActionResult(
+          status: HotspotActionStatus.success,
+          message: message,
+        );
+        return ExecutionResult.success(data: result);
+      case 'failure':
+        print('DIAG: ConnectivityCapability._convertHotspotActionResultFromSystem returning failure');
+        return ExecutionResult.failure(message ?? 'Hotspot action failed');
+      case 'permissionrequired':
+        print('DIAG: ConnectivityCapability._convertHotspotActionResultFromSystem returning permissionRequired');
+        return ExecutionResult.permissionRequired(message ?? 'Hotspot permission required');
+      case 'useractionrequired':
+        print('DIAG: ConnectivityCapability._convertHotspotActionResultFromSystem returning userActionRequired');
+        final result = HotspotActionResult(
+          status: HotspotActionStatus.userActionRequired,
+          message: message,
+        );
+        return ExecutionResult.userActionRequired(
+          message ?? 'User action required for hotspot',
+          data: result,
+        );
+      case 'unsupported':
+        print('DIAG: ConnectivityCapability._convertHotspotActionResultFromSystem returning unsupported');
+        return ExecutionResult.unsupported(message ?? 'Hotspot control not supported on this platform');
+      default:
+        print('DIAG: ConnectivityCapability._convertHotspotActionResultFromSystem returning failure for unknown status: $status');
+        return ExecutionResult.failure('Unknown hotspot action status: $status');
     }
   }
 }

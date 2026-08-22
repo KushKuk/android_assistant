@@ -100,6 +100,12 @@ abstract interface class AssistantPlatform {
   Future<void> searchAndPlayTrack(String query);
   Future<void> searchAndPlayArtist(String query);
   Future<void> searchAndPlayPlaylist(String query);
+
+  // System Service methods (Binder IPC)
+  Future<bool> pingSystemService();
+  Future<String?> getSystemServiceVersion();
+  Future<String?> getSystemServiceStatus();
+  Future<String?> executeSystemOperation(String operation, String action, {Map<String, dynamic>? args});
 }
 
 class MethodChannelAssistantPlatform implements AssistantPlatform {
@@ -108,6 +114,9 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
   );
   static const _eventChannel = EventChannel(
     'com.example.voice_assistant/assistant_events',
+  );
+  static const _systemServiceMethodChannel = MethodChannel(
+    'com.example.voice_assistant/system_service',
   );
 
   @override
@@ -339,6 +348,78 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
     } on MissingPluginException {
       print('DIAG: Platform.getTtsStatus() MissingPluginException');
       return TtsState.unavailable;
+    }
+  }
+
+  // System Service methods (Binder IPC)
+  @override
+  Future<bool> pingSystemService() async {
+    print('DIAG: Platform.pingSystemService() entered');
+    try {
+      final result = await _systemServiceMethodChannel.invokeMethod<bool>('ping');
+      print('DIAG: Platform.pingSystemService() got result: $result');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.pingSystemService() PlatformException: $e');
+      return false;
+    } on MissingPluginException {
+      print('DIAG: Platform.pingSystemService() MissingPluginException');
+      return false;
+    }
+  }
+
+  @override
+  Future<String?> getSystemServiceVersion() async {
+    print('DIAG: Platform.getSystemServiceVersion() entered');
+    try {
+      final result = await _systemServiceMethodChannel.invokeMethod<String>('getVersion');
+      print('DIAG: Platform.getSystemServiceVersion() got result: $result');
+      return result;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getSystemServiceVersion() PlatformException: $e');
+      return null;
+    } on MissingPluginException {
+      print('DIAG: Platform.getSystemServiceVersion() MissingPluginException');
+      return null;
+    }
+  }
+
+  @override
+  Future<String?> getSystemServiceStatus() async {
+    print('DIAG: Platform.getSystemServiceStatus() entered');
+    try {
+      final result = await _systemServiceMethodChannel.invokeMethod<String>('getStatus');
+      print('DIAG: Platform.getSystemServiceStatus() got result: $result');
+      return result;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.getSystemServiceStatus() PlatformException: $e');
+      return null;
+    } on MissingPluginException {
+      print('DIAG: Platform.getSystemServiceStatus() MissingPluginException');
+      return null;
+    }
+  }
+
+  @override
+  Future<String?> executeSystemOperation(String operation, String action, {Map<String, dynamic>? args}) async {
+    print('DIAG: Platform.executeSystemOperation() entered with operation: $operation, action: $action, args: $args');
+    try {
+      final result = await _systemServiceMethodChannel.invokeMethod<String>(
+        'executeSystemOperation',
+        {
+          'operation': operation,
+          'action': action,
+          'args': args,
+        },
+      );
+      print('DIAG: Platform.executeSystemOperation() got result: $result');
+      return result;
+    } on PlatformException catch (e) {
+      print('DIAG: Platform.executeSystemOperation() PlatformException: $e');
+      return null;
+    } on MissingPluginException {
+      print('DIAG: Platform.executeSystemOperation() MissingPluginException');
+      return null;
     }
   }
 
@@ -903,6 +984,8 @@ class MethodChannelAssistantPlatform implements AssistantPlatform {
       print('DIAG: Platform.stopWakeWordDetection() MissingPluginException');
     }
   }
+
+  // System Service methods (Binder IPC) are implemented in the interface above
 
   // WhatsApp methods implementation
   @override

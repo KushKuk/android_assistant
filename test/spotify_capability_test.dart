@@ -38,6 +38,11 @@ class MockAssistantPlatform implements AssistantPlatform {
   String? lastArtistQuery;
   String? lastPlaylistQuery;
 
+  // System Service methods
+  bool pingSystemServiceValue = true;
+  String? systemServiceVersion = "1.0.0-prototype";
+  String? systemServiceStatus = "OK";
+
   @override
   Stream<Map<Object?, Object?>> get events => _eventController
       .stream
@@ -163,6 +168,22 @@ class MockAssistantPlatform implements AssistantPlatform {
   @override
   Future<void> searchAndPlayPlaylist(String query) async {
     lastPlaylistQuery = query;
+  }
+
+  // System Service methods
+  @override
+  Future<bool> pingSystemService() async => pingSystemServiceValue;
+
+  @override
+  Future<String?> getSystemServiceVersion() async => systemServiceVersion;
+
+  @override
+  Future<String?> getSystemServiceStatus() async => systemServiceStatus;
+
+  @override
+  Future<String?> executeSystemOperation(String operation, String action, {Map<String, dynamic>? args}) async {
+    // Return a dummy JSON result for testing
+    return '{"status":"SUCCESS","operation":"$operation","message":"Test successful","silent":true,"requiresUserAction":false}';
   }
 
   // Bluetooth methods
